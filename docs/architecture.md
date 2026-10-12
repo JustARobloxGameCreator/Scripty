@@ -72,7 +72,15 @@ Implemented in `checker.py` as `check(program) -> Program`. It returns the same 
 - The first error found stops the check.
 
 ### 6. Generator (AST -> Python text)
-Walks the tree and writes equivalent Python. Each Scripty construct maps to one Python construct (`let` -> assignment, `show` -> `print`). Keep the mapping simple. The generator also records a **line map** from Python lines back to Scripty lines.
+Walks the tree and writes equivalent Python. Each Scripty construct maps to one Python construct (`let` -> assignment, `show` and `echo` -> `print`). Keep the mapping simple.
+
+Implemented in `generator.py` as `generate(program) -> (python_source, line_map)`.
+
+- One Python line per statement. `line_map` is a dict from Python line number to Scripty line number (blank lines and comments in Scripty do not exist in the Python, so the numbers differ).
+- Text is written with `repr`, so quotes and backslashes are always safe.
+- The tree is preserved exactly: every operation nested in another gets parentheses (`1 + 2 * 3` -> `1 + (2 * 3)`).
+- Division is **true division** (Python `/`): `7 / 2` is `3.5`, `4 / 2` is `2.0`.
+- A variable named like a Python keyword (`class`) or `print` is renamed with a `_scy` suffix in the generated code.
 
 ### 7. Run
 Executes the generated Python (via `exec()` or a temporary `.py` file). Output appears in the terminal.

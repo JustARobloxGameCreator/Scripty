@@ -16,12 +16,13 @@ _Last updated: 2026-10-12_
 - Lexer done (`lexer.py`, `errors.py`) with unit tests in `tests/`.
 - Parser done (`parser.py`, `ast_nodes.py`) with unit tests: `let`, `show`, `echo`, arithmetic, parentheses, friendly syntax errors.
 - Checker done (`checker.py`) with unit tests: undeclared variables and duplicate declarations.
+- Generator done (`generator.py`) with unit tests: Python output plus line map.
 
 ## What's next?
 
 Milestone 1 (v0.1), in this order, testing each stage alone before connecting them:
 
 1. `checker.py`: undeclared and duplicate variable errors (done).
-2. `generator.py`: Python output plus the line map (next).
-3. `cli.py`: `scripty run` and `scripty build`, with runtime errors translated to Scripty terms.
+2. `generator.py`: Python output plus the line map (done).
+3. `cli.py` (next): `scripty run` and `scripty build`, with runtime errors translated to Scripty terms.
 4. An example `hello.scy` and tests.

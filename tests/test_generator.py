@@ -33,8 +33,7 @@ class StatementTests(unittest.TestCase):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             exec(compile(source, "<test>", "exec"), {})
-        self.assertEqual(output.getvalue(), "10
-")
+        self.assertEqual(output.getvalue(), "10" + chr(10))
 
 
 class TextTests(unittest.TestCase):

@@ -14,19 +14,21 @@ Each stage is its own Python file so it can be tested alone:
 
 | Stage | File | Input | Output | Typical errors |
 |---|---|---|---|---|
-| CLI | `cli.py` | command | file path | file not found, wrong extension |
-| Read | (in `cli.py`) | file path | source text | unreadable file |
+| CLI | `cli.py`, `scripty.py`, `scripty.bat` | command | file path | file not found, wrong extension |
+| Read | `cli.py` (`read_source`) | file path | source text | unreadable file |
 | Lexer | `lexer.py` | text | tokens (with line numbers) | bad character, unclosed string |
 | Parser | `parser.py` | tokens | AST | syntax error (`let = 5`) |
 | Checker | `checker.py` | AST | AST or error | undeclared variable, duplicate declaration |
 | Generator | `generator.py` | AST | Python text (+ line map) | rare, internal |
-| Run | (in `cli.py`) | Python text | program output | runtime errors (e.g. divide by zero) |
+| Run | `runner.py` | Python text | program output | runtime errors (e.g. divide by zero) |
 
 ### 1. CLI
 Receives the file path, checks that the file exists and ends in `.scy`, otherwise prints a friendly error and stops. Commands:
 
 - `scripty run hello.scy` runs the program.
 - `scripty build hello.scy` only prints the generated Python (for debugging and teaching).
+
+Implemented in `cli.py` as `main(argv) -> exit code`. Ways to start it from the repo folder: `python scripty.py run hello.scy`, `python cli.py run hello.scy`, or `scripty run hello.scy` on Windows (`scripty.bat`). A missing file or a wrong extension prints `Error: I can't find the file "x.scy".` or `Error: Scripty files end in .scy, but "x.txt" does not.` Any `ScriptyError` is printed to stderr as `Error on line N: ...` and the exit code is 1 (0 on success). Output is forced to UTF-8.
 
 ### 2. Read
 Loads the source as plain text. Nothing is interpreted yet.
@@ -70,6 +72,7 @@ Implemented in `checker.py` as `check(program) -> Program`. It returns the same 
 - A `let` value is checked **before** its name is declared, so `let x = x + 1` is an error when `x` is new.
 - Declaring the same name twice is an error in v0.1 (`"x" is already declared on line 1 ...`). This rule may be relaxed when reassignment is added.
 - The first error found stops the check.
+- **Types.** Every value is a number or text; the checker remembers the kind of each variable from its `let`. Numbers work with `+ - * /`. Text can only be joined with other text using `+` (concatenation, `"a" + "b"` is `ab`). Everything else is an error with the operator's line: `"a" + 1`, `"a" * "b"`, `-"a"`, e.g. `You can't use "+" to mix text and a number. ...`. The checker is the primary defence; the runner's TypeError translation is the safety net.
 
 ### 6. Generator (AST -> Python text)
 Walks the tree and writes equivalent Python. Each Scripty construct maps to one Python construct (`let` -> assignment, `show` and `echo` -> `print`). Keep the mapping simple.
@@ -83,7 +86,15 @@ Implemented in `generator.py` as `generate(program) -> (python_source, line_map)
 - A variable named like a Python keyword (`class`) or `print` is renamed with a `_scy` suffix in the generated code.
 
 ### 7. Run
-Executes the generated Python (via `exec()` or a temporary `.py` file). Output appears in the terminal.
+Executes the generated Python. Output appears in the terminal.
+
+Implemented in `runner.py` as `run_python(source, line_map)`. The code is compiled with the fixed filename `<scripty>` and run with `exec()`. If it raises, the traceback entry for `<scripty>` gives the Python line, the line map gives the Scripty line, and a `ScriptyError` is raised with a friendly message:
+
+- `ZeroDivisionError`: `You tried to divide by zero. Dividing by zero has no answer.`
+- `TypeError`: mixing text and numbers.
+- `NameError`: `I don't know what "z" is. ...`
+- `OverflowError`: the number is too big.
+- any other exception: `Something went wrong while running this line.`
 
 ## Error handling
 

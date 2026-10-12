@@ -1,0 +1,5 @@
+# Text and echo
+let name = "Scripty"
+echo("Hello world!")
+show "Hello, " + name
+show (2 + 3) * 4 / 8

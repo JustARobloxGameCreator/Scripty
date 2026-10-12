@@ -5,6 +5,7 @@ All notable changes to Scripty are recorded here, newest first.
 ## [Unreleased]
 
 ### Added
+- Checker (`checker.py`): friendly errors for undeclared variables (including `let x = x + 1`) and duplicate declarations, with unit tests in `tests/test_checker.py` (issue #3).
 - Parser (`parser.py`) and AST nodes (`ast_nodes.py`): `let`, `show`, `echo`, arithmetic with precedence, parentheses and unary minus, with friendly line-numbered syntax errors (issue #2).
 - Parser unit tests in `tests/test_parser.py`.
 - Lexer (`lexer.py`): tokens with line numbers, `#` comments, friendly errors for unknown characters and unclosed text (issue #1).

@@ -45,6 +45,22 @@ Implemented in `lexer.py` as `tokenize(source) -> list[Token]`. A `Token` has `k
 ### 4. Parser (tokens -> AST)
 Checks that tokens follow the grammar and builds the syntax tree. Catches syntax errors such as `let = 5` or a missing value.
 
+Implemented in `parser.py` as `parse(tokens) -> Program`. The tree nodes are simple dataclasses in `ast_nodes.py`: statements `Let(name, value, line)`, `Show(value, line)`, `Echo(value, line)`; expressions `Number`, `Text`, `Name`, `BinaryOp(op, left, right, line)` and `Negate(operand, line)`. A `Program` holds the list of statements. Every node keeps its line number.
+
+Grammar (recursive descent, one function per rule):
+
+```
+statement  = "let" NAME "=" expression | "show" expression | "echo" "(" expression ")"
+expression = term { ("+" | "-") term }
+term       = factor { ("*" | "/") factor }
+factor     = "-" factor | NUMBER | TEXT | NAME | "(" expression ")"
+```
+
+- `*` and `/` bind tighter than `+` and `-`; same-level operators group left to right; parentheses override.
+- Unary minus is supported (`-5`, `3 * -x`) and binds tighter than `*` and `/`.
+- `echo` needs parentheses, `show` does not.
+- Syntax errors raise `ScriptyError` with a friendly message and line: missing name (`let = 5`), missing `=`, missing value, `show` with nothing, stray tokens, unbalanced parentheses, an operator where a value was expected.
+
 ### 5. Checker (AST -> AST or error)
 A light pass for meaning errors: using a variable before declaring it, or declaring one twice (if disallowed). Its main job is **clear, beginner-friendly messages**.
 

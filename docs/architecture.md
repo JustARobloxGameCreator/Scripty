@@ -62,7 +62,14 @@ factor     = "-" factor | NUMBER | TEXT | NAME | "(" expression ")"
 - Syntax errors raise `ScriptyError` with a friendly message and line: missing name (`let = 5`), missing `=`, missing value, `show` with nothing, stray tokens, unbalanced parentheses, an operator where a value was expected.
 
 ### 5. Checker (AST -> AST or error)
-A light pass for meaning errors: using a variable before declaring it, or declaring one twice (if disallowed). Its main job is **clear, beginner-friendly messages**.
+A light pass for meaning errors. Its main job is **clear, beginner-friendly messages**.
+
+Implemented in `checker.py` as `check(program) -> Program`. It returns the same tree unchanged if everything is fine, otherwise raises `ScriptyError`. It walks every statement and expression in order, remembering declared names and the line each was declared on.
+
+- Undeclared variable: `Error on line 2: I don't know what "z" is. Did you forget to write: let z = ...`
+- A `let` value is checked **before** its name is declared, so `let x = x + 1` is an error when `x` is new.
+- Declaring the same name twice is an error in v0.1 (`"x" is already declared on line 1 ...`). This rule may be relaxed when reassignment is added.
+- The first error found stops the check.
 
 ### 6. Generator (AST -> Python text)
 Walks the tree and writes equivalent Python. Each Scripty construct maps to one Python construct (`let` -> assignment, `show` -> `print`). Keep the mapping simple. The generator also records a **line map** from Python lines back to Scripty lines.

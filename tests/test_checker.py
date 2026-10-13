@@ -311,5 +311,131 @@ class FunctionTests(unittest.TestCase):
     def test_call_result_in_arithmetic(self):
         check(parse_source(ADD + "show Add(1, 2) * 2 + 1"))
 
+class ForLoopTests(unittest.TestCase):
+    def test_valid_loops(self):
+        check(parse_source(
+            'let word = "hi"\nfor c in word:\n    show c\n'
+            'for d in "x" + "y":\n    let up = d + "!"\n    show up'))
+
+    def test_loop_variable_is_text(self):
+        check(parse_source('for c in "hi":\n    show c + "!"'))
+        error = error_for('for c in "hi":\n    show c + 1')
+        self.assertEqual(error.line, 2)
+        self.assertIn("mix text and a number", error.message)
+
+    def test_number_literal_is_an_error(self):
+        error = error_for("for i in 5:\n    show i")
+        self.assertEqual(error.line, 1)
+        self.assertEqual(error.message, "You can only go through text with "
+                                        "for, but 5 is a number.")
+
+    def test_number_variable_is_an_error(self):
+        error = error_for("let n = 3\nfor i in n:\n    show i")
+        self.assertEqual(error.line, 2)
+        self.assertIn('"n" is a number', error.message)
+
+    def test_number_expression_is_an_error(self):
+        error = error_for("for i in 2 * 3:\n    show i")
+        self.assertIn("this value is a number", error.message)
+
+    def test_unknown_kind_is_accepted(self):
+        check(parse_source(
+            'function F(t):\n    for c in t:\n        show c\nF("hi")\n'
+            'function G():\n    give "ab"\nfor c in G():\n    show c'))
+
+    def test_undeclared_iterable(self):
+        error = error_for("for c in word:\n    show c")
+        self.assertEqual(error.line, 1)
+        self.assertIn('"word"', error.message)
+
+    def test_loop_variable_disappears_after_loop(self):
+        error = error_for('for c in "hi":\n    show c\nshow c')
+        self.assertEqual(error.line, 3)
+        self.assertIn('"c"', error.message)
+
+    def test_name_can_be_reused_after_loop(self):
+        check(parse_source('for c in "hi":\n    show c\nlet c = 1\nshow c'))
+        check(parse_source('for c in "a":\n    show c\nfor c in "b":\n'
+                           '    show c'))
+
+    def test_variable_made_in_loop_disappears(self):
+        error = error_for('for c in "hi":\n    let t = c\nshow t')
+        self.assertEqual(error.line, 3)
+
+    def test_loop_variable_cannot_shadow_visible_name(self):
+        error = error_for('let c = 1\nfor c in "hi":\n    show c')
+        self.assertEqual(error.line, 2)
+        self.assertIn("already declared on line 1", error.message)
+
+    def test_loop_variable_cannot_shadow_function_input(self):
+        error = error_for('function F(c):\n    for c in "hi":\n        show c')
+        self.assertEqual(error.line, 2)
+        self.assertIn("already declared", error.message)
+
+    def test_nested_loops_cannot_reuse_the_name(self):
+        error = error_for(
+            'for c in "ab":\n    for c in "xy":\n        show c')
+        self.assertEqual(error.line, 2)
+
+    def test_let_in_loop_cannot_reuse_loop_variable(self):
+        error = error_for('for c in "ab":\n    let c = "x"')
+        self.assertEqual(error.line, 2)
+
+    def test_loop_variable_cannot_be_function_name(self):
+        error = error_for(
+            'function F():\n    give 1\nfor F in "ab":\n    show F')
+        self.assertEqual(error.line, 3)
+        self.assertIn("name of a function", error.message)
+
+    def test_loop_can_see_outer_variables(self):
+        check(parse_source('let a = 1\nfor c in "ab":\n    show a + 1'))
+
+    def test_function_loop_cannot_see_global(self):
+        error = error_for(
+            'let g = "x"\nfunction F():\n    for c in g:\n        show c')
+        self.assertEqual(error.line, 3)
+        self.assertIn("inside the function", error.message)
+
+    def test_loops_inside_if_and_if_inside_loops(self):
+        check(parse_source(
+            'let n = 1\nif n == 1:\n    for c in "ab":\n'
+            '        if c == "a":\n            show c\n'
+            '        else:\n            show 0'))
+
+    def test_error_inside_loop_body_keeps_its_line(self):
+        error = error_for('for c in "ab":\n    show z')
+        self.assertEqual(error.line, 2)
+
+    def test_give_inside_loop_then_give_after_is_fine(self):
+        check(parse_source(
+            'function F(t):\n    for c in t:\n        give c\n'
+            '    give "none"\nshow F("ab")'))
+
+    def test_give_only_inside_loop_is_not_on_every_path(self):
+        error = error_for(
+            'function F(t):\n    for c in t:\n        give c\nshow F("a")')
+        self.assertEqual(error.line, 1)
+        self.assertIn("not in all", error.message)
+
+    def test_if_else_with_loop_branch_is_not_on_every_path(self):
+        error = error_for(
+            'function F(t):\n    if t == "a":\n        for c in t:\n'
+            '            give c\n    else:\n        give "b"')
+        self.assertIn("not in all", error.message)
+
+    def test_loop_inside_function_without_give_is_a_statement_only(self):
+        check(parse_source(
+            'function F(t):\n    for c in t:\n        show c\nF("hi")'))
+        error = error_for(
+            'function F(t):\n    for c in t:\n        show c\n'
+            'show F("hi")')
+        self.assertIn("never gives anything back", error.message)
+
+    def test_give_inside_loop_makes_function_usable_as_value(self):
+        check(parse_source(
+            'function F(t):\n    for c in t:\n        give c\n'
+            '    give ""\nshow F("hi")'))
+
+
 if __name__ == "__main__":
     unittest.main()

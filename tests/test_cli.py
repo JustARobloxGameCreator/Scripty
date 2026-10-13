@@ -237,5 +237,77 @@ class FunctionAndIfRunTests(ProgramFileTestCase):
         result = self.run_source("give 1")
         self.assertFriendlyError(result, "Error on line 1: give only works")
 
+FOR_TODO_PROGRAM = """for i in "hello world!":
+    show i
+"""
+
+
+class ForLoopRunTests(ProgramFileTestCase):
+    def test_todo_example_runs(self):
+        result = self.run_source(FOR_TODO_PROGRAM)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, "")
+        self.assertEqual(len(result.stdout.splitlines()), 12)
+        self.assertEqual(
+            result.stdout.splitlines(),
+            ["h", "e", "l", "l", "o", " ", "w", "o", "r", "l", "d", "!"])
+
+    def test_todo_example_with_comment_and_blank_line(self):
+        result = self.run_source(
+            "// the to-do example\n\n" + FOR_TODO_PROGRAM + "\nshow 1")
+        self.assertEqual(len(result.stdout.splitlines()), 13)
+
+    def test_loops_example_file(self):
+        result = scripty("run", os.path.join("examples", "loops.scy"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), [
+            "h", "e", "l", "l", "o", " ", "w", "o", "r", "l", "d", "!",
+            "found an i!", "yes", "no", "ax", "ay", "bx", "by"])
+
+    def test_build_shows_python(self):
+        result = scripty("build", self.write(FOR_TODO_PROGRAM))
+        self.assertEqual(result.stdout.splitlines(),
+                         ["for i in 'hello world!':", "    print(i)"])
+
+    def test_loop_over_function_input(self):
+        result = self.run_source(
+            'function Spell(t):\n    for c in t:\n        show c\n'
+            'Spell("hi")')
+        self.assertEqual(result.stdout.splitlines(), ["h", "i"])
+
+    def test_number_loop_checker_error(self):
+        result = self.run_source("let n = 5\nfor i in n:\n    show i")
+        self.assertFriendlyError(
+            result, 'Error on line 2: You can only go through text with '
+                    'for, but "n" is a number.')
+
+    def test_number_loop_runtime_error(self):
+        result = self.run_source(
+            "function Spell(t):\n    for c in t:\n        show c\n"
+            "Spell(5)")
+        self.assertFriendlyError(
+            result, "Error on line 2: You can only go through text with for")
+
+    def test_error_in_loop_body_reports_its_line(self):
+        result = self.run_source(
+            'function F(n):\n    for c in "ab":\n        show 1 / n\nF(0)')
+        self.assertFriendlyError(result, "Error on line 3: You tried to "
+                                         "divide by zero")
+
+    def test_loop_variable_used_after_loop(self):
+        result = self.run_source('for c in "ab":\n    show c\nshow c')
+        self.assertFriendlyError(result, 'Error on line 3: I don\'t know '
+                                         'what "c" is')
+        self.assertEqual(result.stdout, "")
+
+    def test_missing_in_error(self):
+        result = self.run_source('for c "ab":\n    show c')
+        self.assertFriendlyError(result, 'Error on line 1: I expected "in"')
+
+    def test_missing_colon_error(self):
+        result = self.run_source('for c in "ab"\n    show c')
+        self.assertFriendlyError(result, "Error on line 1: ")
+
+
 if __name__ == "__main__":
     unittest.main()

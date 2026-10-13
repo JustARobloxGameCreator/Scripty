@@ -23,6 +23,12 @@ Scope rules (simple on purpose):
 - The lines inside an if / elif / else branch form a small scope of their
   own: variables made there disappear after the branch ends. They can see
   everything around them, and cannot reuse a name that is already visible.
+- A `for` loop has a scope of its own too: the loop variable and every
+  `let` inside the loop disappear after it. Like in an if branch, the loop
+  variable cannot reuse a name that is already visible (no shadowing).
+  The loop variable always holds text (one character), and a `for` can
+  only go through text: a number is an error when its kind is known, and
+  a run-time error otherwise (function inputs and call results).
 - Function names live in one list for the whole program. A function is
   visible everywhere; a call at the top of the program must come after the
   `function` lines (it would fail at run time otherwise). Functions may
@@ -38,16 +44,18 @@ catches mistakes. Conditions: `==` and `!=` may compare anything (different
 kinds are simply never equal); `> < >= <=` need two numbers or two texts
 (texts compare alphabetically).
 
-A function that has a `give` must give on every path (its last line must be
-a `give`, or an if/else where every branch gives), so that a call never
-produces "nothing". A function without any `give` can only be called as a
+A function that has a `give` (also one inside an if or a for) must give on
+every path (its last line must be a `give`, or an if/else where every
+branch gives), so that a call never produces "nothing". A `for` never counts
+as giving, because it may run zero times (an empty text): put a `give`
+after the loop. A function without any `give` can only be called as a
 line on its own, not used as a value.
 
 The checker walks the tree top to bottom. It never changes the tree.
 """
 
 from ast_nodes import (BinaryOp, Call, CallStatement, Compare, Echo,
-                       Expression, Function, Give, If, Let, Name, Negate,
+                       Expression, For, Function, Give, If, Let, Name, Negate,
                        Number, Program, Show, Text)
 from errors import ScriptyError
 
@@ -137,6 +145,8 @@ class _Checker:
             self.check_call(statement.call, scope, as_value=False)
         elif isinstance(statement, If):
             self.check_if(statement, scope)
+        elif isinstance(statement, For):
+            self.check_for(statement, scope)
         elif isinstance(statement, Function):
             self.check_function(statement)
 
@@ -146,6 +156,18 @@ class _Checker:
             self.check_block(branch.body, scope)
         if node.else_body is not None:
             self.check_block(node.else_body, scope)
+
+    def check_for(self, node: For, scope: _Scope) -> None:
+        kind = self.check_expression(node.iterable, scope)
+        if kind == NUMBER_KIND:
+            raise ScriptyError(
+                "You can only go through text with for, but "
+                f"{_describe_number(node.iterable)} is a number.", node.line)
+        inner = _Scope(parent=scope)
+        # Only text can go through a loop, so every step is a text.
+        self.declare(inner, node.name, node.line, TEXT_KIND)
+        for statement in node.body:
+            self.check_statement(statement, inner)
 
     def check_block(self, body: list, scope: _Scope) -> None:
         inner = _Scope(parent=scope)
@@ -254,6 +276,15 @@ class _Checker:
         return UNKNOWN_KIND
 
 
+def _describe_number(expression: Expression) -> str:
+    """Name a number for the error message: 5, "n" or "this value"."""
+    if isinstance(expression, Number):
+        return str(expression.value)
+    if isinstance(expression, Name):
+        return f'"{expression.name}"'
+    return "this value"
+
+
 def _plural(count: int) -> str:
     return f"{count} input" + ("" if count == 1 else "s")
 
@@ -268,6 +299,8 @@ def _contains_give(body: list) -> bool:
                 parts.append(statement.else_body)
             if any(_contains_give(part) for part in parts):
                 return True
+        elif isinstance(statement, For) and _contains_give(statement.body):
+            return True
     return False
 
 
@@ -281,7 +314,7 @@ def _always_gives(body: list) -> bool:
     if isinstance(last, If) and last.else_body is not None:
         parts = [branch.body for branch in last.branches] + [last.else_body]
         return all(_always_gives(part) for part in parts)
-    return False
+    return False  # a for loop may run zero times, so it never counts
 
 
 def _check_operation(expression: BinaryOp, left: str, right: str) -> str:

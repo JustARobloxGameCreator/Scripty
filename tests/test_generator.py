@@ -107,6 +107,67 @@ def run_source(source: str) -> str:
     return output.getvalue()
 
 
+class ForLoopGenerationTests(unittest.TestCase):
+    TODO = 'for i in "hello world!":\n    show i\n'
+
+    def test_todo_example_python(self):
+        source, _ = gen(self.TODO)
+        self.assertEqual(source,
+                         "for i in 'hello world!':\n    print(i)\n")
+
+    def test_todo_example_output(self):
+        self.assertEqual(run_source(self.TODO),
+                         "\n".join("hello world!") + "\n")
+
+    def test_line_map_covers_header_and_body(self):
+        source = '// c\nfor i in "ab":\n\n    show i\n    show 1\nshow 2'
+        _, line_map = gen(source)
+        self.assertEqual(line_map, {1: 2, 2: 4, 3: 5, 4: 6})
+
+    def test_loop_over_variable_and_expression(self):
+        source, _ = gen('let w = "ab"\nfor c in w:\n    show c\n'
+                        'for d in "a" + "b":\n    show d')
+        self.assertIn("for c in w:", source)
+        self.assertIn("for d in 'a' + 'b':", source)
+
+    def test_nested_loops_and_ifs_are_indented(self):
+        source, _ = gen('for a in "x":\n    for b in "y":\n'
+                        '        if a == b:\n            show a\n'
+                        '        else:\n            show b')
+        self.assertEqual(source, (
+            "for a in 'x':\n    for b in 'y':\n        if a == b:\n"
+            "            print(a)\n        else:\n            print(b)\n"))
+
+    def test_loop_in_function_with_give(self):
+        source = ('function Find(t, w):\n    for c in t:\n'
+                  '        if c == w:\n            give "yes"\n'
+                  '    give "no"\nshow Find("abc", "b")\n'
+                  'show Find("abc", "z")')
+        self.assertEqual(run_source(source), "yes\nno\n")
+
+    def test_keyword_and_builtin_names_get_suffix(self):
+        source, _ = gen('for class in "ab":\n    show class\n'
+                        'for print in "c":\n    show print')
+        self.assertIn("for class_scy in 'ab':", source)
+        self.assertIn("print(class_scy)", source)
+        self.assertIn("for print_scy in 'c':", source)
+        self.assertEqual(run_source(
+            'for class in "ab":\n    show class'), "a\nb\n")
+
+    def test_empty_text_runs_zero_times(self):
+        self.assertEqual(run_source('for c in "":\n    show c\nshow 1'),
+                         "1\n")
+
+    def test_name_reused_after_loop(self):
+        self.assertEqual(
+            run_source('for c in "ab":\n    show c\nlet c = 7\nshow c'),
+            "a\nb\n7\n")
+
+    def test_loop_inside_if(self):
+        self.assertEqual(run_source(
+            'if 1 < 2:\n    for c in "ab":\n        show c'), "a\nb\n")
+
+
 class FunctionAndIfGenerationTests(unittest.TestCase):
     TODO = (
         "function Name(item1, item2):\n"

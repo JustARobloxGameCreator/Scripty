@@ -81,5 +81,36 @@ class DuplicateTests(unittest.TestCase):
         self.assertIn('"y"', error.message)
 
 
+class TypeTests(unittest.TestCase):
+    def test_text_plus_text_is_allowed(self):
+        check(parse_source('let a = "x"\nshow a + "y" + a'))
+
+    def test_numbers_allow_everything(self):
+        check(parse_source("show 1 + 2 * 3 - 4 / 5"))
+
+    def test_text_plus_number(self):
+        error = error_for('show "a" + 1')
+        self.assertEqual(error.line, 1)
+        self.assertIn("mix text and a number", error.message)
+
+    def test_number_plus_text_variable(self):
+        error = error_for('let a = "a"\nlet b = 1\nshow b + a')
+        self.assertEqual(error.line, 3)
+
+    def test_text_times_text(self):
+        error = error_for('show "a" * "b"')
+        self.assertIn('can\'t use "*" with text', error.message)
+
+    def test_text_minus_text(self):
+        self.assertIn('"-"', error_for('show "a" - "b"').message)
+
+    def test_negating_text(self):
+        self.assertIn("minus sign", error_for('show -"a"').message)
+
+    def test_type_flows_through_variables(self):
+        error = error_for('let a = "x" + "y"\nlet b = a * 2')
+        self.assertEqual(error.line, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-12_
+_Last updated: 2026-10-13_
 
 ## How to run and test
 
@@ -13,7 +13,7 @@ scripty run hello.scy                # Windows only, uses scripty.bat
 python -m unittest discover -s tests -t . -v   # run all tests
 ```
 
-Examples live in `hello.scy` and `examples/`. Errors are shown as `Error on line N: ...`, never as a Python traceback.
+Examples live in `hello.scy` and `examples/` (`text.scy`, `conditions.scy`, `functions.scy`). Errors are shown as `Error on line N: ...`, never as a Python traceback.
 
 ## What are the project milestones?
 
@@ -32,6 +32,8 @@ Examples live in `hello.scy` and `examples/`. Errors are shown as `Error on line
 - Generator done (`generator.py`) with unit tests: Python output plus line map.
 - CLI done (`cli.py`, `runner.py`, `scripty.py`, `scripty.bat`): `run` and `build`, runtime errors translated to Scripty lines, number/text type checks, `hello.scy` prints 8.
 
+- Milestone 2, part 1 done: conditions (`if`/`elif`/`else` with `== != >= <= > <`) and functions (`function`, `give`, calls, recursion), `//` comments and 4-space indented blocks, with tests for every stage (issues #12 and #14). The tasks in `docs/to-do.md` are ticked off.
+
 ## What's next?
 
 Milestone 1 (v0.1), in this order, testing each stage alone before connecting them:
@@ -41,4 +43,11 @@ Milestone 1 (v0.1), in this order, testing each stage alone before connecting th
 3. `cli.py`: `scripty run` and `scripty build`, with runtime errors translated to Scripty terms (done).
 4. An example `hello.scy` and tests (done).
 
-Milestone 1 (v0.1) is complete. Next is milestone 2: conditions, loops, functions, then the AI features.
+Milestone 1 (v0.1) is complete. Milestone 2 is in progress:
+
+1. Conditions (done, #12).
+2. Functions (done, #14).
+3. Loops (next, #13).
+4. The AI features.
+
+Ideas noticed along the way, not yet planned: `and`/`or`, reassigning a variable, letting functions read global variables.

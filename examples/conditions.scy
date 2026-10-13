@@ -1,0 +1,21 @@
+// Conditions: if, elif, else
+let age = 20
+
+if (age >= 18):
+    echo("You can enter")
+else:
+    echo("Too young")
+
+let score = 85
+if score >= 90: // parentheses are optional
+    echo("A")
+elif score >= 80:
+    echo("B")
+else:
+    echo("C")
+
+let n = 3
+if (n == 5):
+    echo("five")
+else:
+    echo("not 5")

@@ -98,5 +98,96 @@ class LineMapTests(unittest.TestCase):
         self.assertEqual(line_map, {1: 3, 2: 6, 3: 8})
 
 
+
+def run_source(source: str) -> str:
+    python, _ = gen(source)
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        exec(compile(python, "<test>", "exec"), {})
+    return output.getvalue()
+
+
+class FunctionAndIfGenerationTests(unittest.TestCase):
+    TODO = (
+        "function Name(item1, item2):\n"
+        "    if (item1 > item2): // This is a comment\n"
+        "        give item1 // Same as return\n"
+        "    elif (item1 == item2):\n"
+        "        give 0\n"
+        "    else:\n"
+        "        give item2\n"
+        "show Name(5, 2)\n")
+
+    def test_todo_example_python(self):
+        source, _ = gen(self.TODO)
+        self.assertEqual(source, (
+            "def Name(item1, item2):\n"
+            "    if item1 > item2:\n"
+            "        return item1\n"
+            "    elif item1 == item2:\n"
+            "        return 0\n"
+            "    else:\n"
+            "        return item2\n"
+            "print(Name(5, 2))\n"))
+
+    def test_todo_example_line_map(self):
+        _, line_map = gen(self.TODO)
+        # Python line -> Scripty line (the `else:` maps to Scripty line 6)
+        self.assertEqual(line_map, {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6,
+                                    7: 7, 8: 8})
+
+    def test_line_map_skips_comments_and_blank_lines(self):
+        source = ("// top\nfunction F(a):\n\n    // inside\n    give a\n\n"
+                  "show F(1)")
+        python, line_map = gen(source)
+        self.assertEqual(line_map, {1: 2, 2: 5, 3: 7})
+        self.assertEqual(python.count("\n"), 3)
+
+    def test_all_comparisons(self):
+        for op in ("==", "!=", ">=", "<=", ">", "<"):
+            source, _ = gen(f"if 1 {op} 2:\n    show 1")
+            self.assertEqual(source, f"if 1 {op} 2:\n    print(1)\n")
+
+    def test_nested_blocks_are_indented(self):
+        source, _ = gen(
+            "function F(a):\n    if a > 1:\n        if a > 2:\n"
+            "            give 3\n        give 2\n    give 1")
+        self.assertEqual(source, (
+            "def F(a):\n    if a > 1:\n        if a > 2:\n"
+            "            return 3\n        return 2\n    return 1\n"))
+
+    def test_code_after_a_block_is_dedented(self):
+        source, _ = gen("if 1 < 2:\n    show 1\nshow 2")
+        self.assertEqual(source, "if 1 < 2:\n    print(1)\nprint(2)\n")
+
+    def test_call_statement(self):
+        source, _ = gen("function Hi(n):\n    show n\nHi(1 + 2)")
+        self.assertEqual(source, "def Hi(n):\n    print(n)\nHi(1 + 2)\n")
+
+    def test_python_keyword_names_get_suffix(self):
+        source, _ = gen(
+            "function class(lambda):\n    give lambda\nshow class(1)")
+        self.assertEqual(source, (
+            "def class_scy(lambda_scy):\n    return lambda_scy\n"
+            "print(class_scy(1))\n"))
+
+    def test_function_named_print(self):
+        source, _ = gen("function print(a):\n    give a\nshow print(2)")
+        self.assertIn("def print_scy(a):", source)
+        self.assertEqual(run_source("function print(a):\n    give a\n"
+                                    "show print(2)"), "2\n")
+
+    def test_generated_code_runs(self):
+        self.assertEqual(run_source(self.TODO), "5\n")
+
+    def test_recursion(self):
+        source = ("function Fact(n):\n    if n <= 1:\n        give 1\n"
+                  "    else:\n        give n * Fact(n - 1)\nshow Fact(5)")
+        self.assertEqual(run_source(source), "120\n")
+
+    def test_text_comparison_runs(self):
+        self.assertEqual(run_source(
+            'if "a" < "b":\n    echo("yes")\nelse:\n    echo("no")'), "yes\n")
+
 if __name__ == "__main__":
     unittest.main()

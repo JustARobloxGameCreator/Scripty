@@ -112,5 +112,204 @@ class TypeTests(unittest.TestCase):
         self.assertEqual(error.line, 2)
 
 
+
+ADD = "function Add(a, b):\n    give a + b\n"
+
+
+class ConditionTests(unittest.TestCase):
+    def test_valid_if_elif_else(self):
+        check(parse_source(
+            "let x = 5\nif x > 3:\n    show 1\nelif x == 3:\n    show 2\n"
+            "else:\n    show 3"))
+
+    def test_undeclared_name_in_condition(self):
+        error = error_for("if z > 3:\n    show 1")
+        self.assertEqual(error.line, 1)
+        self.assertIn('"z"', error.message)
+
+    def test_ordering_text_with_number_is_error(self):
+        error = error_for('let t = "a"\nif t > 3:\n    show 1')
+        self.assertEqual(error.line, 2)
+        self.assertIn("compare text with a number", error.message)
+        self.assertIn("==", error.message)
+
+    def test_ordering_text_with_text_is_fine(self):
+        check(parse_source('if "a" < "b":\n    show 1'))
+
+    def test_equality_between_different_kinds_is_allowed(self):
+        check(parse_source('if "5" == 5:\n    show 1\nelif 5 != "5":\n    show 2'))
+
+    def test_error_inside_branch_has_its_own_line(self):
+        error = error_for("if 1 < 2:\n    show 1\nelse:\n    show nope")
+        self.assertEqual(error.line, 4)
+
+    def test_branch_variable_is_gone_after_the_if(self):
+        error = error_for("if 1 < 2:\n    let a = 1\nshow a")
+        self.assertEqual(error.line, 3)
+
+    def test_same_name_in_two_branches_is_fine(self):
+        check(parse_source(
+            "if 1 < 2:\n    let a = 1\n    show a\nelse:\n    let a = 2\n"
+            "    show a"))
+
+    def test_branch_cannot_redeclare_outer_variable(self):
+        error = error_for("let a = 1\nif 1 < 2:\n    let a = 2")
+        self.assertEqual(error.line, 3)
+        self.assertIn("already declared on line 1", error.message)
+
+    def test_branch_can_use_outer_variable(self):
+        check(parse_source("let a = 1\nif a < 2:\n    show a + 1"))
+
+    def test_type_error_in_branch(self):
+        error = error_for('if 1 < 2:\n    show "a" + 1')
+        self.assertEqual(error.line, 2)
+
+
+class FunctionTests(unittest.TestCase):
+    def test_valid_function_and_calls(self):
+        check(parse_source(ADD + "let r = Add(1, 2)\nshow Add(r, 3)\nAdd(1, 1)"))
+
+    def test_todo_example_is_valid(self):
+        check(parse_source(
+            "function Name(item1, item2):\n"
+            "    if (item1 > item2):\n        give item1\n"
+            "    elif (item1 == item2):\n        give 0\n"
+            "    else:\n        give item2\n"
+            "show Name(1, 2)"))
+
+    def test_parameters_are_declared_in_the_function(self):
+        check(parse_source("function F(a):\n    show a"))
+
+    def test_parameter_not_visible_outside(self):
+        error = error_for("function F(a):\n    show a\nshow a")
+        self.assertEqual(error.line, 3)
+
+    def test_local_variable_not_visible_outside(self):
+        error = error_for("function F():\n    let a = 1\n    give a\nshow a")
+        self.assertEqual(error.line, 4)
+
+    def test_function_cannot_see_global_variable(self):
+        error = error_for("let g = 1\nfunction F():\n    give g\nshow F()")
+        self.assertEqual(error.line, 3)
+        self.assertIn("inside the function", error.message)
+        self.assertIn("function F(g)", error.message)
+
+    def test_same_name_inside_and_outside_is_fine(self):
+        check(parse_source(
+            "let x = 1\nfunction F():\n    let x = 2\n    give x\nshow F()"))
+
+    def test_let_cannot_redeclare_parameter(self):
+        error = error_for("function F(a):\n    let a = 1")
+        self.assertEqual(error.line, 2)
+        self.assertIn("already declared on line 1", error.message)
+
+    def test_duplicate_parameter(self):
+        error = error_for("function F(a, a):\n    show a")
+        self.assertEqual(error.line, 1)
+        self.assertIn("already declared", error.message)
+
+    def test_duplicate_local_variable(self):
+        error = error_for("function F():\n    let a = 1\n    let a = 2")
+        self.assertEqual(error.line, 3)
+
+    def test_duplicate_function(self):
+        error = error_for(ADD + ADD)
+        self.assertEqual(error.line, 3)
+        self.assertIn("already defined on line 1", error.message)
+
+    def test_function_name_clashes_with_variable(self):
+        error = error_for(ADD + "let Add = 1")
+        self.assertEqual(error.line, 3)
+        self.assertIn("name of a function", error.message)
+
+    def test_parameter_named_like_function(self):
+        error = error_for(ADD + "function G(Add):\n    show Add")
+        self.assertEqual(error.line, 3)
+
+    def test_unknown_function(self):
+        error = error_for("show Nope(1)")
+        self.assertEqual(
+            str(error),
+            'Error on line 1: I don\'t know a function called "Nope". '
+            "Did you forget to write: function Nope(...):")
+
+    def test_calling_a_variable(self):
+        error = error_for("let x = 1\nshow x(2)")
+        self.assertEqual(error.line, 2)
+        self.assertIn("not a function", error.message)
+
+    def test_using_function_name_as_value(self):
+        error = error_for(ADD + "show Add")
+        self.assertEqual(error.line, 3)
+        self.assertIn("is a function", error.message)
+
+    def test_too_few_arguments(self):
+        error = error_for(ADD + "show Add(1)")
+        self.assertEqual(error.line, 3)
+        self.assertIn("needs 2 inputs (a, b), but you gave 1", error.message)
+
+    def test_too_many_arguments(self):
+        error = error_for("function One(a):\n    give a\nOne(1, 2)")
+        self.assertIn("needs 1 input (a), but you gave 2", error.message)
+
+    def test_arguments_are_checked(self):
+        error = error_for(ADD + "show Add(1, nope)")
+        self.assertIn('"nope"', error.message)
+
+    def test_call_before_definition_at_top_level(self):
+        error = error_for("show Add(1, 2)\n" + ADD)
+        self.assertEqual(error.line, 1)
+        self.assertIn("before it is written", error.message)
+
+    def test_functions_may_call_each_other_and_themselves(self):
+        check(parse_source(
+            "function A(n):\n    if n < 1:\n        give 0\n"
+            "    else:\n        give B(n - 1)\n"
+            "function B(n):\n    give A(n) + 1\n"
+            "show A(3)"))
+
+    def test_function_without_give_used_as_value(self):
+        error = error_for("function Hi():\n    show 1\nlet x = Hi()")
+        self.assertEqual(error.line, 3)
+        self.assertIn("never gives anything back", error.message)
+
+    def test_function_without_give_as_statement(self):
+        check(parse_source("function Hi():\n    show 1\nHi()"))
+
+    def test_give_not_on_every_path(self):
+        error = error_for("function F(a):\n    if a > 1:\n        give 1\n")
+        self.assertEqual(error.line, 1)
+        self.assertIn("not in all of them", error.message)
+
+    def test_give_after_if_is_fine(self):
+        check(parse_source(
+            "function F(a):\n    if a > 1:\n        give 1\n    give 2"))
+
+    def test_if_else_where_every_branch_gives_is_fine(self):
+        check(parse_source(
+            "function F(a):\n    if a > 1:\n        give 1\n"
+            "    else:\n        give 2"))
+
+    def test_if_else_with_one_branch_missing_give(self):
+        error = error_for(
+            "function F(a):\n    if a > 1:\n        give 1\n"
+            "    else:\n        show 2")
+        self.assertEqual(error.line, 1)
+
+    def test_types_still_checked_inside_functions(self):
+        error = error_for('function F():\n    give "a" + 1')
+        self.assertEqual(error.line, 2)
+
+    def test_unknown_inputs_are_accepted(self):
+        check(parse_source(
+            'function F(a, b):\n    give a + b * 2 - -a\nshow F("x", 1)'))
+
+    def test_unknown_with_text_cannot_multiply(self):
+        error = error_for('function F(a):\n    give a * "x"')
+        self.assertEqual(error.line, 2)
+
+    def test_call_result_in_arithmetic(self):
+        check(parse_source(ADD + "show Add(1, 2) * 2 + 1"))
+
 if __name__ == "__main__":
     unittest.main()

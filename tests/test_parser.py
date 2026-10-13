@@ -1,6 +1,7 @@
 import unittest
 
-from ast_nodes import (BinaryOp, Echo, Let, Name, Negate, Number, Program,
+from ast_nodes import (BinaryOp, Branch, Call, CallStatement, Compare, Echo,
+                       Function, Give, If, Let, Name, Negate, Number, Program,
                        Show, Text)
 from errors import ScriptyError
 from lexer import tokenize
@@ -143,6 +144,177 @@ class SyntaxErrorTests(unittest.TestCase):
 
     def test_two_values_in_a_row(self):
         self.assertError('show 1 "a"', 1, '"a"')
+
+
+
+TODO_EXAMPLE = """function Name(item1, item2):
+    if (item1 > item2): // This is a comment
+        give item1 // Same as return
+    elif (item1 == item2):
+        give 0
+    else:
+        give item2
+"""
+
+
+class FunctionAndIfTests(unittest.TestCase):
+    def test_todo_example(self):
+        program = parse_source(TODO_EXAMPLE)
+        self.assertEqual(program, Program([Function("Name", ["item1", "item2"], [
+            If([
+                Branch(Compare(">", Name("item1", 2), Name("item2", 2), 2),
+                       [Give(Name("item1", 3), 3)], 2),
+                Branch(Compare("==", Name("item1", 4), Name("item2", 4), 4),
+                       [Give(n(0, 5), 5)], 4),
+            ], [Give(Name("item2", 7), 7)], 6, 2)], 1)]))
+
+    def test_function_without_parameters(self):
+        program = parse_source("function Hi():\n    show 1")
+        self.assertEqual(program.statements,
+                         [Function("Hi", [], [Show(n(1, 2), 2)], 1)])
+
+    def test_parentheses_around_condition_are_optional(self):
+        with_parens = parse_source("if (1 < 2):\n    show 1")
+        without = parse_source("if 1 < 2:\n    show 1")
+        self.assertEqual(with_parens, without)
+
+    def test_parenthesised_expression_inside_condition(self):
+        program = parse_source("if (1 + 2) * 3 > 4:\n    show 1")
+        condition = program.statements[0].branches[0].condition
+        self.assertEqual(condition.op, ">")
+        self.assertIsInstance(condition.left, BinaryOp)
+
+    def test_double_parentheses(self):
+        parse_source("if ((1 + 2) > 2):\n    show 1")
+
+    def test_if_without_else(self):
+        node = parse_source("if 1 == 1:\n    show 1").statements[0]
+        self.assertIsNone(node.else_body)
+
+    def test_nested_if_and_dedent(self):
+        source = ("if 1 < 2:\n    if 2 < 3:\n        show 1\n"
+                  "    show 2\nshow 3")
+        program = parse_source(source)
+        outer = program.statements[0]
+        self.assertEqual(len(outer.branches[0].body), 2)
+        self.assertEqual(len(program.statements), 2)
+
+    def test_calls_as_value_and_statement(self):
+        program = parse_source(
+            'let r = Add(1, 2 * 3)\nshow Add(r, 1)\nGreet("Ana")\nNone()')
+        self.assertEqual(program.statements[0].value,
+                         Call("Add", [n(1), BinaryOp("*", n(2), n(3), 1)], 1))
+        self.assertIsInstance(program.statements[1].value, Call)
+        self.assertEqual(program.statements[2],
+                         CallStatement(Call("Greet", [Text("Ana", 3)], 3), 3))
+        self.assertEqual(program.statements[3].call.args, [])
+
+    def test_call_inside_expression(self):
+        value = parse_source("show 1 + F(2)").statements[0].value
+        self.assertIsInstance(value.right, Call)
+
+    def test_give_inside_if_inside_function(self):
+        parse_source("function F(a):\n    if a > 1:\n        give a\n    give 0")
+
+
+class FunctionAndIfErrorTests(SyntaxErrorTests):
+    def test_missing_colon_function(self):
+        self.assertError("function F(a)\n    give a", 1, "missing", '":"')
+
+    def test_missing_colon_if(self):
+        self.assertError("if 1 < 2\n    show 1", 1, "if", '":"')
+
+    def test_missing_colon_else(self):
+        self.assertError("if 1 < 2:\n    show 1\nelse\n    show 2", 3, '":"')
+
+    def test_missing_body(self):
+        self.assertError("function F(a):\nshow 1", 1, "nothing inside")
+
+    def test_missing_body_at_end_of_file(self):
+        self.assertError("if 1 < 2:", 1, "nothing inside")
+
+    def test_statement_on_same_line_as_colon(self):
+        self.assertError("if 1 < 2: show 1", 1, "next lines")
+
+    def test_elif_without_if(self):
+        self.assertError("elif 1 < 2:\n    show 1", 1, "elif", "if above")
+
+    def test_else_without_if(self):
+        self.assertError("show 1\nelse:\n    show 2", 2, "else", "if above")
+
+    def test_elif_after_else(self):
+        self.assertError(
+            "if 1 < 2:\n    show 1\nelse:\n    show 2\nelif 1 < 3:\n    show 3",
+            5, "elif")
+
+    def test_else_if(self):
+        self.assertError("if 1 < 2:\n    show 1\nelse if 1 < 3:\n    show 3",
+                         3, "elif")
+
+    def test_give_outside_function(self):
+        self.assertError("give 5", 1, "inside a function")
+
+    def test_give_in_if_outside_function(self):
+        self.assertError("if 1 < 2:\n    give 5", 2, "inside a function")
+
+    def test_give_without_value(self):
+        self.assertError("function F():\n    give", 2, "needs a value")
+
+    def test_unexpected_indent(self):
+        self.assertError("show 1\n    show 2", 2, "indented")
+
+    def test_function_inside_function(self):
+        self.assertError("function A():\n    function B():\n        show 1",
+                         2, "can't be written inside")
+
+    def test_function_inside_if(self):
+        self.assertError("if 1 < 2:\n    function B():\n        show 1",
+                         2, "can't be written inside")
+
+    def test_function_without_name(self):
+        self.assertError("function (a):\n    show 1", 1, "forgot its name")
+
+    def test_function_name_is_keyword(self):
+        self.assertError("function show(a):\n    show 1", 1, "keyword")
+
+    def test_function_without_parentheses(self):
+        self.assertError("function F:\n    show 1", 1, "parentheses")
+
+    def test_function_bad_parameter(self):
+        self.assertError("function F(1):\n    show 1", 1, "input name")
+
+    def test_function_trailing_comma(self):
+        self.assertError("function F(a,):\n    show 1", 1, "input name")
+
+    def test_function_missing_comma(self):
+        self.assertError("function F(a b):\n    show 1", 1, "comma")
+
+    def test_function_unclosed_parameters(self):
+        self.assertError("function F(a", 1, "comma")
+
+    def test_if_without_condition(self):
+        self.assertError("if:\n    show 1", 1, "needs a condition")
+
+    def test_condition_without_comparison(self):
+        self.assertError("if 5:\n    show 1", 1, "needs a comparison")
+
+    def test_single_equals_in_condition(self):
+        self.assertError("if x = 5:\n    show 1", 1, '"=="')
+
+    def test_chained_comparison(self):
+        self.assertError("if 1 < 2 < 3:\n    show 1", 1, "two values")
+
+    def test_comparison_outside_if(self):
+        self.assertError("let x = 1 > 2", 1, "after if or elif")
+
+    def test_call_missing_closing_parenthesis(self):
+        self.assertError("show F(1, 2", 1, "closing")
+
+    def test_call_missing_comma(self):
+        self.assertError("show F(1 2)", 1, "comma")
+
+    def test_assignment_without_let(self):
+        self.assertError("x = 5", 1, "must start with", "let x = ...")
 
 
 if __name__ == "__main__":

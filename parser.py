@@ -11,6 +11,7 @@ Grammar:
                | "function" NAME "(" [ NAME { "," NAME } ] ")" block
                | "if" condition block { "elif" condition block }
                  [ "else" block ]
+               | "for" NAME "in" expression block     (once per character)
     block      = ":" NEWLINE INDENT { statement } DEDENT
     condition  = expression COMPARE expression
                | "(" condition ")"                    (parentheses optional)
@@ -29,13 +30,16 @@ Design choices:
 - A condition is exactly one comparison (`x > 5`). Comparisons are not
   values: they only appear after `if` and `elif`. No `and`/`or` yet.
 - Functions can only be defined at the top level (not inside another
-  function or an if), and `give` only works inside a function.
+  function, an if or a for), and `give` only works inside a function.
+- A for loop goes through the characters of a text. It can be used at the
+  top level, inside functions and inside if branches, and loops, ifs and
+  `give` can be nested inside it.
 
 Errors raise ScriptyError with a line number.
 """
 
 from ast_nodes import (BinaryOp, Branch, Call, CallStatement, Compare, Echo,
-                       Expression, Function, Give, If, Let, Name, Negate,
+                       Expression, For, Function, Give, If, Let, Name, Negate,
                        Number, Program, Show, Statement, Text)
 from errors import ScriptyError
 from lexer import (COLON, COMMA, DEDENT, INDENT, KEYWORD, LPAREN, NAME,
@@ -104,7 +108,7 @@ class _Parser:
         if token.kind == INDENT:
             raise ScriptyError(
                 "This line is indented, but the line above does not end "
-                'with a ":". Only the lines inside a function or an if '
+                'with a ":". Only the lines inside a function, an if or a for '
                 "are indented. Remove the spaces at the start.",
                 token.line,
             )
@@ -113,6 +117,13 @@ class _Parser:
                 return self.parse_function()
             if token.value == "if":
                 return self.parse_if()
+            if token.value == "for":
+                return self.parse_for()
+            if token.value == "in":
+                raise ScriptyError(
+                    'in only works in a for line. Try: for letter in "hi":',
+                    token.line,
+                )
             if token.value in ("elif", "else"):
                 raise ScriptyError(
                     f"{token.value} needs an if above it. "
@@ -140,7 +151,7 @@ class _Parser:
         raise ScriptyError(
             f"I don't understand a line that starts with "
             f"{_describe(token)}. A line must start with let, show, echo, "
-            "give, if, function, or a function call like Name(1, 2)." + hint,
+            "give, if, for, function, or a function call like Name(1, 2)." + hint,
             token.line,
         )
 
@@ -241,8 +252,8 @@ class _Parser:
         keyword = self.advance()
         if self.depth > 0:
             raise ScriptyError(
-                "A function can't be written inside another function or "
-                "an if. Put it at the start of a line, outside everything.",
+                "A function can't be written inside another function, "
+                "an if or a for. Put it at the start of a line, outside everything.",
                 keyword.line,
             )
         name = self.peek()
@@ -299,6 +310,42 @@ class _Parser:
                     f'")". I did not expect {_describe(token)} here.',
                     line,
                 )
+
+    def parse_for(self) -> For:
+        keyword = self.advance()
+        example = 'for letter in "hello":'
+        name = self.peek()
+        if name.kind == KEYWORD and name.value != "in":
+            raise ScriptyError(
+                f'"{name.value}" is a Scripty keyword, so it can\'t be the '
+                "name of a loop variable. Pick another name.",
+                keyword.line,
+            )
+        if name.kind != NAME:
+            raise ScriptyError(
+                "You wrote for but forgot the name for each step of the "
+                f"loop. Try: {example}",
+                keyword.line,
+            )
+        self.advance()
+        if not self.is_keyword("in"):
+            raise ScriptyError(
+                f'I expected "in" after "{name.value}". '
+                f'Try: for {name.value} in "hello":',
+                keyword.line,
+            )
+        self.advance()
+        if self.peek().kind in (COLON, NEWLINE):
+            raise ScriptyError(
+                f"for {name.value} in needs a text to go through. "
+                f'Try: for {name.value} in "hello":',
+                keyword.line,
+            )
+        iterable = self.parse_expression()
+        body = self.parse_block(
+            keyword.line, f"the for loop over {name.value}",
+            f'for {name.value} in "hello":')
+        return For(name.value, iterable, body, keyword.line)
 
     def parse_if(self) -> If:
         keyword = self.advance()

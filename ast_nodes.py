@@ -1,6 +1,6 @@
 """AST nodes: the tree the parser builds and later stages walk.
 
-Statements: Let, Show, Echo, CallStatement, Give, If, Function.
+Statements: Let, Show, Echo, CallStatement, Give, If, For, Function.
 Expressions: Number, Text, Name, BinaryOp, Negate, Call.  A Compare (such
 as x > 5) is a condition: it only appears in an if or elif line.  Every node remembers the `line` it came from, so the checker and
 the generator can report friendly, line-numbered errors.
@@ -120,6 +120,16 @@ class If:
 
 
 @dataclass
+class For:
+    """for name in value: ... - run the body once per character of a text."""
+
+    name: str
+    iterable: Expression
+    body: list["Statement"]
+    line: int
+
+
+@dataclass
 class Function:
     name: str
     params: list[str]
@@ -127,7 +137,7 @@ class Function:
     line: int
 
 
-Statement = Let | Show | Echo | CallStatement | Give | If | Function
+Statement = Let | Show | Echo | CallStatement | Give | If | For | Function
 
 
 @dataclass

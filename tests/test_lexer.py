@@ -148,5 +148,26 @@ class IndentationTests(unittest.TestCase):
         self.assertIn("too far", ctx.exception.message)
 
 
+class ForLoopTests(unittest.TestCase):
+    def test_for_and_in_are_keywords(self):
+        tokens = tokenize('for i in "hi":\n    show i')
+        self.assertEqual(
+            [(t.kind, t.value) for t in tokens[:5]],
+            [(KEYWORD, "for"), (NAME, "i"), (KEYWORD, "in"),
+             (TEXT, "hi"), (COLON, ":")])
+
+    def test_for_body_is_indented(self):
+        kinds = [t.kind for t in tokenize('for i in "hi":\n    show i')]
+        self.assertEqual(kinds.count(INDENT), 1)
+        self.assertEqual(kinds.count(DEDENT), 1)
+
+    def test_names_that_only_contain_for_or_in_are_names(self):
+        tokens = tokenize("let inside = format")
+        self.assertEqual([t.kind for t in tokens if t.kind == NAME],
+                         [NAME, NAME])
+        self.assertEqual([t.value for t in tokens if t.kind == KEYWORD],
+                         ["let"])
+
+
 if __name__ == "__main__":
     unittest.main()

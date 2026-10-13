@@ -1,0 +1,23 @@
+// Loops: for NAME in TEXT runs the lines below once per character
+for i in "hello world!":
+    show i
+
+let word = "Scripty"
+for letter in word:
+    if (letter == "i"):
+        echo("found an i!")
+
+// give inside a loop inside a function
+function Find(text, wanted):
+    for letter in text:
+        if (letter == wanted):
+            give "yes"
+    give "no"
+
+show Find("hello", "l")
+show Find("hello", "z")
+
+// loops inside loops
+for a in "ab":
+    for b in "xy":
+        show a + b

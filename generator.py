@@ -1,7 +1,7 @@
 """Generator: turns a checked Scripty program into Python source text.
 
 Each Scripty construct maps to exactly one Python construct, and each
-statement (or header line such as `if`, `elif`, `else`, `function`)
+statement (or header line such as `if`, `elif`, `else`, `for`, `function`)
 becomes exactly one Python line:
 
     let x = 5          ->   x = 5
@@ -11,6 +11,7 @@ becomes exactly one Python line:
     if (a > 1):        ->   if a > 1:
     elif (a == 1):     ->   elif a == 1:
     else:              ->   else:
+    for c in "hi":     ->   for c in 'hi':
     give a             ->   return a
     F(1, 2)            ->   F(1, 2)
 
@@ -34,7 +35,7 @@ report runtime errors on the right Scripty line.
 import keyword
 
 from ast_nodes import (BinaryOp, Call, CallStatement, Compare, Echo,
-                       Expression, Function, Give, If, Let, Name, Negate,
+                       Expression, For, Function, Give, If, Let, Name, Negate,
                        Number, Program, Show, Statement, Text)
 
 # Names that cannot be used as-is in the generated Python.
@@ -67,6 +68,11 @@ def _block(statements: list[Statement], level: int, lines: list[str],
             _block(statement.body, level + 1, lines, line_map)
         elif isinstance(statement, If):
             _if(statement, level, lines, line_map)
+        elif isinstance(statement, For):
+            header = (f"for {python_name(statement.name)} in "
+                      f"{_expression(statement.iterable)}:")
+            _add(header, level, statement.line, lines, line_map)
+            _block(statement.body, level + 1, lines, line_map)
         else:
             _add(_statement(statement), level, statement.line, lines,
                  line_map)

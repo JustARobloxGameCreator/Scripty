@@ -38,7 +38,7 @@ Splits the text into tokens (keyword, name, number, string, operator). Every tok
 
 Implemented in `lexer.py` as `tokenize(source) -> list[Token]`. A `Token` has `kind`, `value` and `line`.
 
-- Kinds: `KEYWORD` (`let`, `show`, `echo`, `function`, `if`, `elif`, `else`, `give`), `NAME`, `NUMBER` (value is an `int` or `float`), `TEXT` (double quotes, one line, value without the quotes), `OPERATOR` (`+ - * / =` and the comparisons `== != >= <= > <`), `LPAREN`, `RPAREN`, `COMMA`, `COLON`, `NEWLINE`, `INDENT`, `DEDENT`.
+- Kinds: `KEYWORD` (`let`, `show`, `echo`, `function`, `if`, `elif`, `else`, `give`, `for`, `in`), `NAME`, `NUMBER` (value is an `int` or `float`), `TEXT` (double quotes, one line, value without the quotes), `OPERATOR` (`+ - * / =` and the comparisons `== != >= <= > <`), `LPAREN`, `RPAREN`, `COMMA`, `COLON`, `NEWLINE`, `INDENT`, `DEDENT`.
 - Each non-blank line ends with a `NEWLINE` token so the parser knows where a statement ends. Blank lines and whitespace produce no tokens.
 - Comments: `//` (the style in `docs/to-do.md`) or `#` ignores the rest of the line. Both work; `//` or `#` inside quoted text is just text. Scripty has no integer division, so `//` is free to be a comment.
 - Indentation: a block is indented by exactly **4 spaces** per level. A line one level deeper than the previous code line gets an `INDENT` token first; going back out gives one `DEDENT` per level (all remaining ones at the end of the file). Blank and comment-only lines do not affect indentation. A tab at the start of a line, an indent that is not a multiple of 4, or an indent that jumps more than one level are friendly errors. A lone `!` is an error that suggests `!=`.
@@ -48,7 +48,7 @@ Implemented in `lexer.py` as `tokenize(source) -> list[Token]`. A `Token` has `k
 ### 4. Parser (tokens -> AST)
 Checks that tokens follow the grammar and builds the syntax tree. Catches syntax errors such as `let = 5` or a missing value.
 
-Implemented in `parser.py` as `parse(tokens) -> Program`. The tree nodes are simple dataclasses in `ast_nodes.py`: statements `Let(name, value, line)`, `Show(value, line)`, `Echo(value, line)`, `CallStatement(call, line)`, `Give(value, line)`, `If(branches, else_body, else_line, line)` (each `Branch(condition, body, line)` is an `if` or `elif` part) and `Function(name, params, body, line)`; expressions `Number`, `Text`, `Name`, `BinaryOp(op, left, right, line)`, `Negate(operand, line)` and `Call(name, args, line)`. A `Compare(op, left, right, line)` is a condition and only appears in `if`/`elif`. A `Program` holds the list of statements. Every node keeps its line number.
+Implemented in `parser.py` as `parse(tokens) -> Program`. The tree nodes are simple dataclasses in `ast_nodes.py`: statements `Let(name, value, line)`, `Show(value, line)`, `Echo(value, line)`, `CallStatement(call, line)`, `Give(value, line)`, `If(branches, else_body, else_line, line)` (each `Branch(condition, body, line)` is an `if` or `elif` part), `For(name, iterable, body, line)` and `Function(name, params, body, line)`; expressions `Number`, `Text`, `Name`, `BinaryOp(op, left, right, line)`, `Negate(operand, line)` and `Call(name, args, line)`. A `Compare(op, left, right, line)` is a condition and only appears in `if`/`elif`. A `Program` holds the list of statements. Every node keeps its line number.
 
 Grammar (recursive descent, one function per rule):
 
@@ -57,6 +57,7 @@ statement  = "let" NAME "=" expression | "show" expression | "echo" "(" expressi
            | call | "give" expression
            | "function" NAME "(" [ NAME { "," NAME } ] ")" block
            | "if" condition block { "elif" condition block } [ "else" block ]
+           | "for" NAME "in" expression block
 block      = ":" NEWLINE INDENT { statement } DEDENT
 condition  = expression COMPARE expression | "(" condition ")"
 expression = term { ("+" | "-") term }
@@ -70,7 +71,9 @@ call       = NAME "(" [ expression { "," expression } ] ")"
 - `echo` needs parentheses, `show` does not.
 - A condition is one comparison (`==`, `!=`, `>=`, `<=`, `>`, `<`). The parentheses around it are optional (`if (x > 5):` and `if x > 5:` are the same). `=` is only for `let`; `if x = 5:` gets an error that suggests `==`. No `and`/`or` yet, and comparisons are not values (`let a = 1 > 2` is an error).
 - `function` is only allowed at the top level (not inside another function or an `if`). `give` is only allowed inside a function. `elif`/`else` need an `if` above them, and `else if` is rejected with a hint to write `elif`.
+- `for NAME in VALUE:` runs its indented body once per character of a text. It is allowed at the top level, inside functions and inside `if` branches, and loops, `if`s and `give` may be nested inside a loop. A `function` cannot be written inside a loop.
 - A call can be a value (`let r = Add(1, 2)`, `show Add(1, 2)`) or a whole line (`Greet("Ana")`).
+- Friendly `for` errors: missing loop name, missing `in`, missing value, missing colon, missing body, wrong indentation, a keyword used as the loop name, `in` outside a `for`.
 - Friendly errors: missing colon, missing or empty body, text after the colon on the same line, unexpected indent, missing function name/parentheses/commas, `give` outside a function, missing condition or comparison.
 - Syntax errors raise `ScriptyError` with a friendly message and line: missing name (`let = 5`), missing `=`, missing value, `show` with nothing, stray tokens, unbalanced parentheses, an operator where a value was expected.
 
@@ -84,7 +87,8 @@ Implemented in `checker.py` as `check(program) -> Program`. It returns the same 
 - Declaring the same name twice is an error in v0.1 (`"x" is already declared on line 1 ...`). This rule may be relaxed when reassignment is added.
 - The first error found stops the check.
 - **Scopes.** The top of the program is the global scope. A function has its **own** scope: its inputs and every `let` inside it are local, and it **cannot see** global variables (pass them in as inputs; the error says so, e.g. `function F(g)`). So a `let x` inside a function never clashes with a `let x` outside. The lines inside an `if`/`elif`/`else` branch form a small scope: variables made there disappear after the branch; a branch can see what is around it but cannot redeclare a name that is already visible (no silent shadowing, so "declared twice" still applies).
-- **Functions.** Names are declared once (`The function "F" is already defined on line N`), cannot also be a variable or input name, and are visible everywhere. A call at the top of the program must come after the function's lines; functions may call themselves and each other. Calling an unknown function, calling a variable, using a function name without `(...)`, or passing the wrong number of inputs are friendly errors with the call's line. A function with a `give` must give on every path (its last line is a `give`, or an if/else where every branch gives); a function with no `give` can only be called as a line on its own, not used as a value.
+- **Loops.** `for NAME in VALUE:` has a scope of its own: the loop variable and every `let` inside the loop disappear after it, so the name can be used again afterwards. Like in an `if` branch, the loop variable may **not** reuse a name that is already visible (no shadowing), and a `let` inside the loop cannot reuse the loop variable. The loop sees everything around it; a function's loop sees only that function's names. The checker type is text: a `for` can only go through text, so every step is text (one character). If the value is known to be a number (`for i in 5:` or a number variable) the checker raises `You can only go through text with for, but 5 is a number.`; function inputs and call results have an unknown kind, so that mistake is caught at run time by the runner with the same wording.
+- **Functions.** Names are declared once (`The function "F" is already defined on line N`), cannot also be a variable or input name, and are visible everywhere. A call at the top of the program must come after the function's lines; functions may call themselves and each other. Calling an unknown function, calling a variable, using a function name without `(...)`, or passing the wrong number of inputs are friendly errors with the call's line. A function with a `give` (also one inside an `if` or a `for`) must give on every path (its last line is a `give`, or an if/else where every branch gives). A `for` never counts as giving, because the text may be empty and the loop may run zero times, so put a `give` after the loop (a `give` inside a loop is fine, as long as the function ends with one that always runs); a function with no `give` can only be called as a line on its own, not used as a value.
 - **Conditions.** `==` and `!=` may compare any two values (text and number are just never equal). `>`, `<`, `>=`, `<=` need two numbers or two texts (texts compare alphabetically); mixing text and number there is an error. Function inputs and call results have an *unknown* kind: the checker accepts them and the runner catches real mistakes.
 - **Types.** Every value is a number or text; the checker remembers the kind of each variable from its `let`. Numbers work with `+ - * /`. Text can only be joined with other text using `+` (concatenation, `"a" + "b"` is `ab`). Everything else is an error with the operator's line: `"a" + 1`, `"a" * "b"`, `-"a"`, e.g. `You can't use "+" to mix text and a number. ...`. The checker is the primary defence; the runner's TypeError translation is the safety net.
 
@@ -93,7 +97,7 @@ Walks the tree and writes equivalent Python. Each Scripty construct maps to one 
 
 Implemented in `generator.py` as `generate(program) -> (python_source, line_map)`.
 
-- One Python line per statement or block header (`def`, `if`, `elif`, `else`), indented 4 spaces per level. `function F(a):` becomes `def F(a):`, `if (c):` becomes `if c:`, `give x` becomes `return x`; calls and comparisons are written as they are. `line_map` is a dict from Python line number to Scripty line number (blank lines and comments in Scripty do not exist in the Python, so the numbers differ).
+- One Python line per statement or block header (`def`, `if`, `elif`, `else`, `for`), indented 4 spaces per level. `function F(a):` becomes `def F(a):`, `if (c):` becomes `if c:`, `for c in "hi":` becomes `for c in 'hi':`, `give x` becomes `return x`; calls and comparisons are written as they are. `line_map` is a dict from Python line number to Scripty line number (blank lines and comments in Scripty do not exist in the Python, so the numbers differ).
 - Text is written with `repr`, so quotes and backslashes are always safe.
 - The tree is preserved exactly: every operation nested in another gets parentheses (`1 + 2 * 3` -> `1 + (2 * 3)`).
 - Division is **true division** (Python `/`): `7 / 2` is `3.5`, `4 / 2` is `2.0`.
@@ -105,12 +109,12 @@ Executes the generated Python. Output appears in the terminal.
 Implemented in `runner.py` as `run_python(source, line_map)`. The code is compiled with the fixed filename `<scripty>` and run with `exec()`. If it raises, the traceback entry for `<scripty>` gives the Python line, the line map gives the Scripty line, and a `ScriptyError` is raised with a friendly message:
 
 - `ZeroDivisionError`: `You tried to divide by zero. Dividing by zero has no answer.`
-- `TypeError`: mixing text and numbers.
+- `TypeError` from a `for` over a number ("... is not iterable"): `You can only go through text with for, but this value is a number.` Any other `TypeError`: mixing text and numbers.
 - `NameError`: `I don't know what "z" is. ...`
 - `RecursionError`: a function kept calling itself and never stopped.
 - `OverflowError`: the number is too big.
 
-Because functions and branches are real Python lines in the line map, errors raised inside them report the Scripty line inside the function or branch.
+Because functions, branches and loops are real Python lines in the line map, errors raised inside them report the Scripty line inside the function, branch or loop.
 - any other exception: `Something went wrong while running this line.`
 
 ## Error handling
@@ -156,11 +160,20 @@ function Compare(a, b):
 show Compare(5, 2)
 ```
 
-See `examples/functions.scy` and `examples/conditions.scy`. Loops and the AI features are not implemented yet.
+See `examples/functions.scy` and `examples/conditions.scy`.
+
+## v0.3 language scope (loops)
+
+```
+for i in "hello world!":
+    show i
+```
+
+prints one character per line (the space prints as a blank-looking line). See `examples/loops.scy`. Only text can be looped over for now; the AI features are not implemented yet.
 
 ## Growing the language
 
-Later versions add loops and then the AI features. Each is added as new tokens, tree nodes, and generator rules. **The pipeline stays the same.**
+Later versions add the AI features. Each is added as new tokens, tree nodes, and generator rules. **The pipeline stays the same.**
 
 ## Design principles
 

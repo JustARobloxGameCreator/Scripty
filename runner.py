@@ -40,6 +40,9 @@ def _scripty_line(error: Exception, line_map: dict[int, int]) -> int:
 def _friendly_message(error: Exception) -> str:
     if isinstance(error, ZeroDivisionError):
         return "You tried to divide by zero. Dividing by zero has no answer."
+    if isinstance(error, TypeError) and "not iterable" in str(error):
+        return ("You can only go through text with for, but this value "
+                "is a number.")
     if isinstance(error, TypeError):
         return ("You tried to mix text and numbers in a calculation. "
                 "Both sides of an operation must be the same kind.")

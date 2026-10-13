@@ -4,6 +4,19 @@ All notable changes to Scripty are recorded here, newest first.
 
 ## [Unreleased]
 
+### Added (loops, issue #13)
+- `for NAME in VALUE:` with an indented 4-space body: runs the body once per character of a text (`for i in "hello world!":` then `show i` prints 12 lines, the space as a blank-looking line). New `for` and `in` keywords and a `For` tree node.
+- The value can be a text, a text variable, a function input or a call result. Loops work at the top level, inside functions and inside `if` branches, and `if`, `give` and other loops can be nested inside them.
+- Checker: the loop variable is text, local to the loop, and cannot reuse a visible name (same no-shadowing rule as `if` branches). `for` over a known number is an error (`You can only go through text with for, but 5 is a number.`). A `give` inside a loop counts as a give, but a loop never counts as giving on every path (it may run zero times), so the function needs a `give` after the loop.
+- Parser: friendly errors for a missing name, `in`, value, colon, body, wrong indentation, a keyword as the loop name, and `in` outside a `for`.
+- Generator: Python `for` with a correct line map; names like `class` or `print` keep the `_scy` suffix.
+- Runner: a `for` over a number at run time (function input) gives the same friendly message instead of a TypeError text.
+- `examples/loops.scy`, `docs/to-do.md` (now with the done functions/conditions section and the loops section), and 94 new tests (340 in total; the 246 existing tests are unchanged).
+
+### Changed (loops)
+- `for` and `in` are now keywords, so they can no longer be used as variable, function or input names.
+- The "indented line" and "function inside" parser errors now also mention `for`.
+
 ### Added (conditions and functions, issues #12 and #14)
 - Conditions: `if`, `elif`, `else` with the comparisons `== != >= <= > <`. Parentheses around the condition are optional.
 - Functions: `function Name(a, b):`, `give` (Python `return`), and calls as values (`let r = Name(1, 2)`) or as a line on their own (`Greet("Ana")`). Recursion works.

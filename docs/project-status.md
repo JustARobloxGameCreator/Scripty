@@ -13,7 +13,7 @@ scripty run hello.scy                # Windows only, uses scripty.bat
 python -m unittest discover -s tests -t . -v   # run all tests
 ```
 
-Examples live in `hello.scy` and `examples/` (`text.scy`, `conditions.scy`, `functions.scy`). Errors are shown as `Error on line N: ...`, never as a Python traceback.
+Examples live in `hello.scy` and `examples/` (`text.scy`, `conditions.scy`, `functions.scy`, `loops.scy`). Errors are shown as `Error on line N: ...`, never as a Python traceback.
 
 ## What are the project milestones?
 
@@ -33,6 +33,7 @@ Examples live in `hello.scy` and `examples/` (`text.scy`, `conditions.scy`, `fun
 - CLI done (`cli.py`, `runner.py`, `scripty.py`, `scripty.bat`): `run` and `build`, runtime errors translated to Scripty lines, number/text type checks, `hello.scy` prints 8.
 
 - Milestone 2, part 1 done: conditions (`if`/`elif`/`else` with `== != >= <= > <`) and functions (`function`, `give`, calls, recursion), `//` comments and 4-space indented blocks, with tests for every stage (issues #12 and #14). The tasks in `docs/to-do.md` are ticked off.
+- Milestone 2, part 2 done: `for NAME in VALUE:` loops over the characters of a text (issue #13), at the top level, in functions and in `if` branches, with friendly errors and tests for every stage (340 tests). `examples/loops.scy` shows them.
 
 ## What's next?
 
@@ -47,7 +48,7 @@ Milestone 1 (v0.1) is complete. Milestone 2 is in progress:
 
 1. Conditions (done, #12).
 2. Functions (done, #14).
-3. Loops (next, #13).
-4. The AI features.
+3. Loops (done, #13).
+4. The AI features (next).
 
-Ideas noticed along the way, not yet planned: `and`/`or`, reassigning a variable, letting functions read global variables.
+Ideas noticed along the way, not yet planned: looping over a number range, `break`, `and`/`or`, reassigning a variable, letting functions read global variables.

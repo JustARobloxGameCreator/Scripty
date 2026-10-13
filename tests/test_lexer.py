@@ -1,7 +1,8 @@
 import unittest
 
 from errors import ScriptyError
-from lexer import (KEYWORD, LPAREN, NAME, NEWLINE, NUMBER, OPERATOR, RPAREN,
+from lexer import (COLON, COMMA, DEDENT, INDENT, KEYWORD, LPAREN, NAME,
+                   NEWLINE, NUMBER, OPERATOR, RPAREN,
                    TEXT, Token, tokenize)
 
 
@@ -60,6 +61,91 @@ class LexerTests(unittest.TestCase):
         self.assertEqual(ctx.exception.line, 2)
         self.assertTrue(str(ctx.exception).startswith("Error on line 2:"))
         self.assertIn("never ends", str(ctx.exception))
+
+
+
+class ComparisonAndCommentTests(unittest.TestCase):
+    def test_all_comparison_operators(self):
+        ops = [t.value for t in tokenize("a == b != c >= d <= e > f < g")
+               if t.kind == OPERATOR]
+        self.assertEqual(ops, ["==", "!=", ">=", "<=", ">", "<"])
+
+    def test_single_equals_stays_assignment(self):
+        self.assertEqual(tokenize("=")[0], Token(OPERATOR, "=", 1))
+
+    def test_lonely_bang_is_friendly_error(self):
+        with self.assertRaises(ScriptyError) as ctx:
+            tokenize("if x ! 5:")
+        self.assertIn("!=", str(ctx.exception))
+
+    def test_new_keywords(self):
+        words = "function if elif else give"
+        kinds = [t.kind for t in tokenize(words)]
+        self.assertEqual(kinds, [KEYWORD] * 5 + [NEWLINE])
+
+    def test_colon_and_comma(self):
+        kinds = [t.kind for t in tokenize("function f(a, b):")]
+        self.assertEqual(kinds, [KEYWORD, NAME, LPAREN, NAME, COMMA, NAME,
+                                 RPAREN, COLON, NEWLINE])
+
+    def test_slash_slash_comment(self):
+        self.assertEqual(tokenize("// nothing"), [])
+        self.assertEqual(len(tokenize("show x // prints x")), 3)
+
+    def test_hash_comment_still_works(self):
+        self.assertEqual(len(tokenize("show x # prints x")), 3)
+
+    def test_slash_slash_inside_text_is_text(self):
+        tokens = tokenize('show "http://a.b" // real comment')
+        self.assertEqual(tokens[1], Token(TEXT, "http://a.b", 1))
+        self.assertEqual(len(tokens), 3)
+
+    def test_single_slash_is_division(self):
+        self.assertEqual(len(tokenize("show 4 / 2")), 5)
+
+
+class IndentationTests(unittest.TestCase):
+    def kinds(self, source):
+        return [t.kind for t in tokenize(source)]
+
+    def test_indent_and_dedent(self):
+        tokens = tokenize("if a > 1:\n    show a\nshow 2")
+        self.assertEqual(
+            [(t.kind, t.line) for t in tokens if t.kind in (INDENT, DEDENT)],
+            [(INDENT, 2), (DEDENT, 3)])
+
+    def test_dedents_at_end_of_file(self):
+        tokens = tokenize("function f():\n    if a > 1:\n        give 1\n")
+        self.assertEqual([t.kind for t in tokens[-3:]],
+                         [NEWLINE, DEDENT, DEDENT])
+        self.assertEqual(tokens[-1].line, 3)
+
+    def test_two_levels_close_together(self):
+        tokens = tokenize("function f():\n    if a > 1:\n        give 1\nshow 2")
+        self.assertEqual(sum(t.kind == DEDENT for t in tokens), 2)
+
+    def test_blank_and_comment_lines_do_not_change_indentation(self):
+        source = "if a > 1:\n    show a\n\n// note\n  \n    show b\n"
+        self.assertEqual(self.kinds(source).count(INDENT), 1)
+        self.assertEqual(self.kinds(source).count(DEDENT), 1)
+
+    def test_tab_is_rejected(self):
+        with self.assertRaises(ScriptyError) as ctx:
+            tokenize("if a > 1:\n\tshow a")
+        self.assertEqual(ctx.exception.line, 2)
+        self.assertIn("tab", ctx.exception.message)
+
+    def test_wrong_number_of_spaces(self):
+        with self.assertRaises(ScriptyError) as ctx:
+            tokenize("if a > 1:\n  show a")
+        self.assertEqual(ctx.exception.line, 2)
+        self.assertIn("4 spaces", ctx.exception.message)
+
+    def test_indent_too_far(self):
+        with self.assertRaises(ScriptyError) as ctx:
+            tokenize("if a > 1:\n        show a")
+        self.assertEqual(ctx.exception.line, 2)
+        self.assertIn("too far", ctx.exception.message)
 
 
 if __name__ == "__main__":

@@ -47,6 +47,9 @@ def _friendly_message(error: Exception) -> str:
         name = getattr(error, "name", None) or "that name"
         return (f'I don\'t know what "{name}" is. '
                 f"Did you forget to write: let {name} = ...")
+    if isinstance(error, RecursionError):
+        return ("A function kept calling itself and never stopped. "
+                "Make sure it can reach a give that does not call itself.")
     if isinstance(error, OverflowError):
         return "This number is too big for Scripty to work with."
     return "Something went wrong while running this line."

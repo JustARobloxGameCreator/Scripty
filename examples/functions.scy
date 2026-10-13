@@ -1,0 +1,29 @@
+// Functions and conditions
+// Run with: scripty run examples/functions.scy
+
+function Add(a, b):
+    give a + b
+
+function Greet(name):
+    give "Hello, " + name + "!"
+
+function Compare(a, b):
+    if (a > b): // a comparison makes a condition
+        give "bigger"
+    elif (a == b):
+        give "equal"
+    else:
+        give "smaller"
+
+function Factorial(n):
+    if (n <= 1):
+        give 1
+    else:
+        give n * Factorial(n - 1)
+
+show Add(3, 4)
+show Greet("Scripty")
+show Compare(5, 2)
+show Compare(3, 3)
+show Compare(1, 9)
+show Factorial(5)

@@ -35,6 +35,8 @@ Examples live in `hello.scy` and `examples/` (`text.scy`, `conditions.scy`, `fun
 - Milestone 2, part 1 done: conditions (`if`/`elif`/`else` with `== != >= <= > <`) and functions (`function`, `give`, calls, recursion), `//` comments and 4-space indented blocks, with tests for every stage (issues #12 and #14). The tasks in `docs/to-do.md` are ticked off.
 - Milestone 2, part 2 done: `for NAME in VALUE:` loops over the characters of a text (issue #13), at the top level, in functions and in `if` branches, with friendly errors and tests for every stage (340 tests). `examples/loops.scy` shows them.
 
+- Milestone 3, part 1 done: `README.md` added for the public release (issue #16). It explains how to get Scripty and how to run `.scy` files. A guide to using the language is still to come.
+
 ## What's next?
 
 Milestone 1 (v0.1), in this order, testing each stage alone before connecting them:

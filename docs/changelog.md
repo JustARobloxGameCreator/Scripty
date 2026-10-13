@@ -4,6 +4,9 @@ All notable changes to Scripty are recorded here, newest first.
 
 ## [Unreleased]
 
+### Added (public release, issue #16)
+- `README.md`: what Scripty is, what you need (Python 3.10+), how to download it, and how to run `.scy` files (`run`, `build`, the Windows launcher, running your own file, the examples, errors, tests). It does not teach the language itself yet.
+
 ### Added (loops, issue #13)
 - `for NAME in VALUE:` with an indented 4-space body: runs the body once per character of a text (`for i in "hello world!":` then `show i` prints 12 lines, the space as a blank-looking line). New `for` and `in` keywords and a `For` tree node.
 - The value can be a text, a text variable, a function input or a call result. Loops work at the top level, inside functions and inside `if` branches, and `if`, `give` and other loops can be nested inside them.

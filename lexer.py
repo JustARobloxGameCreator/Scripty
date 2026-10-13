@@ -1,7 +1,7 @@
 """Lexer: turns Scripty source text into a list of tokens.
 
 Rules:
-- Keywords: let, show, echo, function, if, elif, else, give.
+- Keywords: let, show, echo, function, if, elif, else, give, for, in.
 - Names: letters, digits and underscores, not starting with a digit.
 - Numbers: 5 or 3.14 (the value is an int or a float).
 - Text: written in double quotes on a single line, e.g. "Hello".
@@ -27,7 +27,8 @@ from typing import NamedTuple
 
 from errors import ScriptyError
 
-KEYWORDS = {"let", "show", "echo", "function", "if", "elif", "else", "give"}
+KEYWORDS = {"let", "show", "echo", "function", "if", "elif", "else", "give",
+            "for", "in"}
 INDENT_SIZE = 4
 
 # Token kinds

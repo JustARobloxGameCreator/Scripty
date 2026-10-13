@@ -1,7 +1,7 @@
 import unittest
 
 from ast_nodes import (BinaryOp, Branch, Call, CallStatement, Compare, Echo,
-                       Function, Give, If, Let, Name, Negate, Number, Program,
+                       For, Function, Give, If, Let, Name, Negate, Number, Program,
                        Show, Text)
 from errors import ScriptyError
 from lexer import tokenize
@@ -315,6 +315,116 @@ class FunctionAndIfErrorTests(SyntaxErrorTests):
 
     def test_assignment_without_let(self):
         self.assertError("x = 5", 1, "must start with", "let x = ...")
+
+
+TODO_FOR = 'for i in "hello world!":\n    show i'
+
+
+class ForLoopTests(unittest.TestCase):
+    def test_todo_example(self):
+        program = parse_source(TODO_FOR)
+        self.assertEqual(program, Program([
+            For("i", Text("hello world!", 1), [Show(Name("i", 2), 2)], 1)]))
+
+    def test_iterable_can_be_a_variable_call_or_expression(self):
+        source = ('for a in word:\n    show a\n'
+                  'for b in F(1):\n    show b\n'
+                  'for c in "x" + "y":\n    show c')
+        values = [s.iterable for s in parse_source(source).statements]
+        self.assertEqual(values[0], Name("word", 1))
+        self.assertEqual(values[1], Call("F", [n(1, 3)], 3))
+        self.assertIsInstance(values[2], BinaryOp)
+
+    def test_statements_after_the_loop_are_outside_it(self):
+        program = parse_source('for i in "ab":\n    show i\nshow 1')
+        self.assertEqual(len(program.statements), 2)
+        self.assertEqual(len(program.statements[0].body), 1)
+
+    def test_nested_loops_ifs_and_give(self):
+        source = ('function F(t):\n'
+                  '    for a in t:\n'
+                  '        for b in t:\n'
+                  '            if a == b:\n'
+                  '                give a\n'
+                  '    give "none"')
+        function = parse_source(source).statements[0]
+        outer = function.body[0]
+        self.assertIsInstance(outer, For)
+        self.assertIsInstance(outer.body[0], For)
+        self.assertIsInstance(outer.body[0].body[0], If)
+
+    def test_loop_inside_if_branch(self):
+        program = parse_source('if 1 < 2:\n    for i in "a":\n        show i')
+        self.assertIsInstance(program.statements[0].branches[0].body[0], For)
+
+
+class ForLoopErrorTests(SyntaxErrorTests):
+    def test_missing_name(self):
+        self.assertError('for in "hi":\n    show 1', 1, "forgot the name",
+                         "for letter in")
+
+    def test_missing_name_and_everything(self):
+        self.assertError("for", 1, "forgot the name")
+
+    def test_number_as_name(self):
+        self.assertError('for 5 in "hi":\n    show 1', 1, "forgot the name")
+
+    def test_keyword_as_name(self):
+        self.assertError('for let in "hi":\n    show 1', 1, '"let"',
+                         "keyword")
+
+    def test_missing_in(self):
+        self.assertError('for i "hi":\n    show i', 1, 'expected "in"',
+                         '"i"')
+
+    def test_missing_in_at_end_of_line(self):
+        self.assertError("for i\n    show i", 1, 'expected "in"')
+
+    def test_wrong_word_instead_of_in(self):
+        self.assertError('for i of "hi":\n    show i', 1, 'expected "in"')
+
+    def test_missing_value_before_colon(self):
+        self.assertError("for i in:\n    show i", 1, "needs a text",
+                         "for i in")
+
+    def test_missing_value_at_end_of_line(self):
+        self.assertError("for i in", 1, "needs a text")
+
+    def test_missing_colon(self):
+        self.assertError('for i in "hi"\n    show i', 1, '":"', "for loop")
+
+    def test_junk_instead_of_colon(self):
+        self.assertError('for i in "hi" 5:\n    show i', 1, '":"')
+
+    def test_missing_body(self):
+        self.assertError('for i in "hi":\nshow 1', 1, "nothing inside",
+                         "4 spaces")
+
+    def test_missing_body_at_end_of_file(self):
+        self.assertError('for i in "hi":', 1, "nothing inside")
+
+    def test_statement_on_same_line(self):
+        self.assertError('for i in "hi": show i', 1, "next lines")
+
+    def test_wrong_indentation_in_body(self):
+        self.assertError('for i in "hi":\n  show i', 2, "4 spaces")
+
+    def test_body_indented_too_far(self):
+        self.assertError('for i in "hi":\n        show i', 2, "too far")
+
+    def test_in_outside_for(self):
+        self.assertError("in 5", 1, "in only works", "for")
+
+    def test_function_inside_for(self):
+        self.assertError('for i in "hi":\n    function F():\n        show 1',
+                         2, "can't be written inside")
+
+    def test_give_in_loop_outside_function(self):
+        self.assertError('for i in "hi":\n    give i', 2,
+                         "inside a function")
+
+    def test_indented_line_without_colon_mentions_for(self):
+        self.assertError("show 1\n    show 2", 2, "a for")
 
 
 if __name__ == "__main__":

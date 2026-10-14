@@ -9,8 +9,13 @@ Python traceback.
 The program runs with its own `print`, so `show` writes a list the Scripty
 way: [1, 2, 3] for numbers and ["a", "b"] for text (Python would write
 single quotes). Numbers and text are printed exactly as Python prints them.
+
+It also gets two helpers for the list actions `a.remove(value)` and
+`a.pop(index)`: `remove_all` (prints a warning to stderr and goes on when
+nothing matches) and `pop_at` (raises a friendly error for a bad position).
 """
 
+import sys
 import traceback
 
 from errors import ScriptyError
@@ -37,11 +42,68 @@ def _scripty_print(*values: object) -> None:
     print(*(format_value(value) for value in values))
 
 
+class ListActionError(Exception):
+    """A friendly problem with a list action (the message is shown as is)."""
+
+
+def _describe_kind(value: object) -> str:
+    if isinstance(value, list):
+        return "a list"
+    return "text" if isinstance(value, str) else "a number"
+
+
+def remove_all(items: object, value: object, line: int) -> None:
+    """a.remove(value): remove every item equal to value, or warn."""
+    if not isinstance(items, list):
+        raise ListActionError(
+            "remove only works on lists, but this value is "
+            f"{_describe_kind(items)}.")
+    kept = [item for item in items if item != value]
+    if len(kept) == len(items):
+        print(f"Warning on line {line}: {_format_item(value)} is not in the "
+              "list, so nothing was removed.", file=sys.stderr)
+        return
+    items[:] = kept  # change the list itself, so other names see it too
+
+
+def pop_at(items: object, index: object) -> None:
+    """a.pop(index): remove the item at that position (counting from 0)."""
+    if not isinstance(items, list):
+        raise ListActionError(
+            "pop only works on lists, but this value is "
+            f"{_describe_kind(items)}.")
+    if isinstance(index, (str, list)):
+        raise ListActionError(
+            "pop needs a position, which is a whole number, but this is "
+            f"{_describe_kind(index)}.")
+    if index != int(index):
+        raise ListActionError(
+            f"A position must be a whole number, but {index} has a decimal "
+            "part.")
+    position = int(index)
+    if position < 0:
+        raise ListActionError(
+            "Positions start at 0 and can't be negative, so "
+            f"{position} is not a position.")
+    if not items:
+        raise ListActionError(
+            f"The list is empty, so there is no item at position {position}.")
+    if position >= len(items):
+        count = len(items)
+        places = ("only position 0" if count == 1
+                  else f"positions 0 to {count - 1}")
+        raise ListActionError(
+            f"The list has {count} item{'' if count == 1 else 's'} "
+            f"({places}), so there is no item at position {position}.")
+    del items[position]
+
+
 def run_python(source: str, line_map: dict[int, int]) -> None:
     """Run generated Python. Raises ScriptyError if the program fails."""
     code = compile(source, GENERATED_FILENAME, "exec")
     try:
-        exec(code, {"__name__": "__scripty__", "print": _scripty_print})
+        exec(code, {"__name__": "__scripty__", "print": _scripty_print,
+                   "remove_all": remove_all, "pop_at": pop_at})
     except Exception as error:
         line = _scripty_line(error, line_map)
         failed = _python_line_text(error, source)
@@ -75,6 +137,8 @@ def _scripty_line(error: Exception, line_map: dict[int, int]) -> int:
 
 
 def _friendly_message(error: Exception, failed_line: str = "") -> str:
+    if isinstance(error, ListActionError):
+        return str(error)
     if isinstance(error, ZeroDivisionError):
         return "You tried to divide by zero. Dividing by zero has no answer."
     if isinstance(error, ValueError) and "empty" in str(error):

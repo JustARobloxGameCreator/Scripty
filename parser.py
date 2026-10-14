@@ -8,6 +8,7 @@ Grammar:
                | "show" expression NEWLINE
                | "echo" "(" expression ")" NEWLINE
                | call NEWLINE                         (a call as a line)
+               | NAME "." method NEWLINE              (a list action)
                | "give" expression NEWLINE            (only inside a function)
                | "function" NAME "(" [ NAME { "," NAME } ] ")" block
                | "if" condition block { "elif" condition block }
@@ -23,6 +24,7 @@ Grammar:
                | "(" expression ")"
     list       = "[" [ expression { "," expression } ] "]"
     call       = NAME "(" [ expression { "," expression } ] ")"
+    method     = ("remove" | "pop") "(" [ expression { "," expression } ] ")"
 
 Design choices:
 
@@ -39,6 +41,10 @@ Design choices:
 - `name = value` (no `let`) is a statement of its own: it gives an
   existing variable a new value. Whether the name exists is the checker's
   job.
+- A list action is `name.remove(value)` or `name.pop(index)`. It is parsed
+  like a call, but only the name before the dot and the two method names
+  are accepted here. Whether `name` is really a list, and how many inputs
+  the action needs, is the checker's job. A "." anywhere else is an error.
 - A for loop goes through the characters of a text or the items of a
   list. It can be used at the
   top level, inside functions and inside if branches, and loops, ifs and
@@ -47,11 +53,12 @@ Design choices:
 Errors raise ScriptyError with a line number.
 """
 
-from ast_nodes import (Assign, BinaryOp, Branch, Call, CallStatement, Compare, Echo,
-                       Expression, For, Function, Give, If, Let,
-                       ListLiteral, Name, Negate, Number, Program, Show, Statement, Text)
+from ast_nodes import (LIST_METHODS, Assign, BinaryOp, Branch, Call, CallStatement,
+                       Compare, Echo, Expression, For, Function, Give, If, Let,
+                       ListLiteral, MethodCall, MethodStatement, Name, Negate,
+                       Number, Program, Show, Statement, Text)
 from errors import ScriptyError
-from lexer import (COLON, COMMA, DEDENT, INDENT, KEYWORD, LBRACKET, LPAREN,
+from lexer import (COLON, COMMA, DEDENT, DOT, INDENT, KEYWORD, LBRACKET, LPAREN,
                    NAME, NEWLINE, NUMBER, OPERATOR, RBRACKET, RPAREN, TEXT,
                    Token)
 
@@ -70,6 +77,14 @@ def _describe(token: Token) -> str:
     if token.kind in (INDENT, DEDENT):
         return "the end of the block"
     return f'"{token.value}"'
+
+
+def _dot_error(token: Token) -> ScriptyError:
+    """A "." that is not part of a number or a list action."""
+    return ScriptyError(
+        'A "." only works right after the name of a list, like: '
+        'a.remove("Dog") or a.pop(1). For a decimal number write the '
+        "digit before the dot too, like 0.5.", token.line)
 
 
 class _Parser:
@@ -155,14 +170,19 @@ class _Parser:
             return self.parse_give()
         if token.kind == NAME and self.peek_next().kind == LPAREN:
             return CallStatement(self.parse_call(), token.line)
+        if token.kind == NAME and self.peek_next().kind == DOT:
+            return MethodStatement(self.parse_method_call(), token.line)
+        if token.kind == DOT or self.peek_next().kind == DOT:
+            raise _dot_error(token if token.kind == DOT else self.peek_next())
         if (token.kind == NAME and self.peek_next().kind == OPERATOR
                 and self.peek_next().value == "="):
             return self.parse_assign()
         raise ScriptyError(
             f"I don't understand a line that starts with "
             f"{_describe(token)}. A line must start with let, show, echo, "
-            "give, if, for, function, a function call like Name(1, 2), or a "
-            "new value for a variable like x = 5.",
+            "give, if, for, function, a function call like Name(1, 2), a "
+            "list action like a.pop(1), or a new value for a variable like "
+            "x = 5.",
             token.line,
         )
 
@@ -253,6 +273,8 @@ class _Parser:
                 "Did you add one ) too many?",
                 token.line,
             )
+        elif token.kind == DOT:
+            raise _dot_error(token)
         elif token.kind == OPERATOR and token.value in COMPARISONS:
             raise ScriptyError(
                 f'"{token.value}" compares two values, so it can only be '
@@ -529,6 +551,8 @@ class _Parser:
         if token.kind == NAME:
             if self.peek_next().kind == LPAREN:
                 return self.parse_call()
+            if self.peek_next().kind == DOT:
+                return self.parse_method_call()
             self.advance()
             return Name(token.value, token.line)
         if self.is_operator("-"):
@@ -538,15 +562,50 @@ class _Parser:
             return self.parse_parentheses()
         if token.kind == LBRACKET:
             return self.parse_list()
+        if token.kind == DOT:
+            raise _dot_error(token)
         raise self.missing_value_error(token)
 
     def parse_call(self) -> Call:
         name = self.advance()
         self.advance()  # the "("
+        args = self.parse_arguments(name.value, name.line)
+        return Call(name.value, args, name.line)
+
+    def parse_method_call(self) -> MethodCall:
+        """Read `name.remove(value)` or `name.pop(index)`."""
+        target = self.advance()
+        self.advance()  # the "."
+        method = self.peek()
+        if method.kind != NAME:
+            raise ScriptyError(
+                'A "." must be followed by what to do with the list. '
+                'Try: a.remove("Dog") or a.pop(1)', target.line)
+        self.advance()
+        if method.value not in LIST_METHODS:
+            raise ScriptyError(
+                f"I don't know what \"{method.value}\" does to a list. "
+                f"The list actions are: {', '.join(LIST_METHODS)}. "
+                f'Try: {target.value}.remove("Dog") or {target.value}.pop(1)',
+                target.line)
+        if self.peek().kind != LPAREN:
+            example = ('"Dog"' if method.value == "remove" else "1")
+            raise ScriptyError(
+                f"{method.value} needs parentheses with a value inside. "
+                f"Try: {target.value}.{method.value}({example})",
+                target.line)
+        self.advance()  # the "("
+        args = self.parse_arguments(f"{target.value}.{method.value}",
+                                    target.line)
+        return MethodCall(Name(target.value, target.line), method.value,
+                          args, target.line)
+
+    def parse_arguments(self, name: str, line: int) -> list[Expression]:
+        """Read the inputs of a call, after its "(", up to the ")"."""
         args: list[Expression] = []
         if self.peek().kind == RPAREN:
             self.advance()
-            return Call(name.value, args, name.line)
+            return args
         while True:
             args.append(self.parse_expression())
             token = self.peek()
@@ -554,13 +613,13 @@ class _Parser:
                 self.advance()
             elif token.kind == RPAREN:
                 self.advance()
-                return Call(name.value, args, name.line)
+                return args
             else:
                 raise ScriptyError(
-                    f'The call to {name.value} is missing its closing ")" '
+                    f'The call to {name} is missing its closing ")" '
                     "(or a comma between inputs). "
                     f"I did not expect {_describe(token)} here.",
-                    name.line,
+                    line,
                 )
 
     def parse_list(self) -> ListLiteral:

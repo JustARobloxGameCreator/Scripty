@@ -18,6 +18,8 @@ becomes exactly one Python line:
     [1, 2]             ->   [1, 2]
     max(a)             ->   max(a)      (also min and len)
     sort(a)            ->   a.sort()    (sorts the list itself)
+    a.remove("Dog")    ->   remove_all(a, 'Dog', 3)   (3 = the Scripty line)
+    a.pop(2)           ->   pop_at(a, 2)
 
 Blocks are indented with 4 spaces, like in Scripty.
 
@@ -30,6 +32,9 @@ Design choices:
 - Lists are Python lists. `show a` is still `print(a)`: the runner prints
   lists in the Scripty way (see runner.py), so the generator needs no
   type information.
+- `remove_all` and `pop_at` are small helpers that the runner gives to the
+  program (see runner.py). `remove_all` needs the Scripty line number to
+  write its warning, so the generator passes it as the last input.
 - A Scripty variable, function or input name that would clash with Python
   (a Python keyword such as `class`, or `print`) gets `_scy` added to its
   name in the generated code.
@@ -43,10 +48,11 @@ import keyword
 
 from ast_nodes import (Assign, BinaryOp, Call, CallStatement, Compare, Echo,
                        Expression, For, Function, Give, If, Let, ListLiteral,
-                       Name, Negate, Number, Program, Show, Statement, Text)
+                       MethodStatement, Name, Negate, Number, Program, Show,
+                       Statement, Text)
 
 # Names that cannot be used as-is in the generated Python.
-_RESERVED = {"print"}
+_RESERVED = {"print", "remove_all", "pop_at"}
 
 
 def generate(program: Program) -> tuple[str, dict[int, int]]:
@@ -124,6 +130,13 @@ def _statement(statement: Statement) -> str:
         if call.name == "sort":  # sort(a) sorts the list itself
             return f"{_expression(call.args[0])}.sort()"
         return _expression(call)
+    if isinstance(statement, MethodStatement):
+        call = statement.call
+        target = python_name(call.target.name)
+        argument = _expression(call.args[0])
+        if call.method == "remove":
+            return f"remove_all({target}, {argument}, {statement.line})"
+        return f"pop_at({target}, {argument})"
     raise TypeError(f"Cannot generate code for {statement!r}")  # internal
 
 

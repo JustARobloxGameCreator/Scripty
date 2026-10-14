@@ -1,0 +1,23 @@
+// List actions: write the list name, a dot, and what to do
+let pets = ["Dog", "Cat", "Dog", "Bird"]
+
+// remove(value) removes EVERY item that matches
+pets.remove("Dog")
+show pets // output: ["Cat", "Bird"]
+
+// if the value is not there, Scripty prints a warning and keeps going
+pets.remove("Fish")
+show "still running"
+
+// pop(position) removes the item at that position (the first one is 0)
+pets.pop(1)
+show pets // output: ["Cat"]
+
+// they work inside functions and loops too
+function RemoveAll(items, words):
+    for word in words:
+        items.remove(word)
+
+let numbers = [1, 2, 3, 2, 1]
+RemoveAll(numbers, [1, 2])
+show numbers // output: [3]

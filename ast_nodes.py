@@ -1,7 +1,9 @@
 """AST nodes: the tree the parser builds and later stages walk.
 
-Statements: Let, Assign, Show, Echo, CallStatement, Give, If, For, Function.
-Expressions: Number, Text, Name, BinaryOp, Negate, Call, ListLiteral.  A
+Statements: Let, Assign, Show, Echo, CallStatement, MethodStatement, Give,
+If, For, Function.
+Expressions: Number, Text, Name, BinaryOp, Negate, Call, ListLiteral,
+MethodCall (only so the checker can explain it is not a value).  A
 Compare (such as x > 5) is a condition: it only appears in an if or elif
 line.  Every node remembers the `line` it came from, so the checker and
 the generator can report friendly, line-numbered errors.
@@ -71,7 +73,25 @@ class Compare:
     line: int
 
 
-Expression = Number | Text | Name | BinaryOp | Negate | Call | ListLiteral
+@dataclass
+class MethodCall:
+    """A list action such as a.remove("Dog") or a.pop(3).
+
+    `target` is the list's name. It changes the list and gives nothing
+    back, so the checker only allows it as a whole line (MethodStatement).
+    """
+
+    target: Name
+    method: str  # one of LIST_METHODS
+    args: list["Expression"]
+    line: int
+
+
+# The actions that can be written after a dot.
+LIST_METHODS = ("remove", "pop")
+
+Expression = (Number | Text | Name | BinaryOp | Negate | Call | ListLiteral
+              | MethodCall)
 
 
 @dataclass
@@ -107,6 +127,14 @@ class CallStatement:
     """A call used as a whole line, e.g. Greet("Ana"). The result is dropped."""
 
     call: Call
+    line: int
+
+
+@dataclass
+class MethodStatement:
+    """A list action used as a whole line, e.g. a.remove("Dog")."""
+
+    call: MethodCall
     line: int
 
 
@@ -155,7 +183,8 @@ class Function:
     line: int
 
 
-Statement = Let | Assign | Show | Echo | CallStatement | Give | If | For | Function
+Statement = (Let | Assign | Show | Echo | CallStatement | MethodStatement
+             | Give | If | For | Function)
 
 
 @dataclass

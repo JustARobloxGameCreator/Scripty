@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-14_
+_Last updated: 2026-10-14 (classes added)_
 
 ## How to run and test
 
@@ -13,7 +13,7 @@ scripty run hello.scy                # Windows only, uses scripty.bat
 python -m unittest discover -s tests -t . -v   # run all tests
 ```
 
-Examples live in `hello.scy` and `examples/` (`text.scy`, `conditions.scy`, `functions.scy`, `loops.scy`, `lists.scy`, `list_methods.scy`, `indexing.scy`). Errors are shown as `Error on line N: ...`, never as a Python traceback.
+Examples live in `hello.scy` and `examples/` (`text.scy`, `conditions.scy`, `functions.scy`, `loops.scy`, `lists.scy`, `list_methods.scy`, `indexing.scy`, `classes.scy`). Errors are shown as `Error on line N: ...`, never as a Python traceback.
 
 ## What are the project milestones?
 
@@ -41,6 +41,8 @@ Examples live in `hello.scy` and `examples/` (`text.scy`, `conditions.scy`, `fun
 
 - Milestone 2, part 5 done: indexing. `a[1]`, `a[-1]` and `"hello"[1]` give one item or character (positions start at 0, negative counts from the end, any expression as the position), and `a[1] = 9` replaces a list item, with friendly errors for positions that do not exist, decimal or non-number positions, numbers and text assignment (556 tests). `examples/indexing.scy` shows it.
 
+- Milestone 2, part 6 done: classes. `class Dog:` with actions (`function` lines inside), single inheritance (`class Puppy(Dog):`), `init` as the constructor, `self`, attributes (`d.name`, `d.name = value`), action calls (`d.speak()`), `super.init(...)`, `show` of an object (`<Dog object>`), with friendly errors at every stage and 154 new tests (710 in total). `examples/classes.scy` shows it. `class`, `self` and `super` are now reserved words.
+
 - Milestone 3, part 1 done: `README.md` added for the public release (issue #16). It explains how to get Scripty and how to run `.scy` files. A guide to using the language is still to come.
 
 ## What's next?
@@ -57,6 +59,7 @@ Milestone 1 (v0.1) is complete. Milestone 2 is in progress:
 1. Conditions (done, #12).
 2. Functions (done, #14).
 3. Loops (done, #13).
-4. The AI features (next).
+4. Classes (done).
+5. The AI features (next).
 
-Ideas noticed along the way, not yet planned: looping over a number range, `break`, `and`/`or`, letting functions read global variables, slices (`a[1:3]`), adding items to a list, `pop` giving back the removed item, lists inside lists, copying a list on `let b = a` (today both names share one list).
+Ideas noticed along the way, not yet planned: several parents, a customised text for `show d` (like `__str__`), calling an action on a call result (`Dog("a", 1).speak()`), looping over a number range, `break`, `and`/`or`, letting functions read global variables, slices (`a[1:3]`), adding items to a list, `pop` giving back the removed item, lists inside lists, copying a list on `let b = a` (today both names share one list).

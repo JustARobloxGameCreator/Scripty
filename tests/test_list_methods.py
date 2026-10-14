@@ -93,11 +93,11 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(parse_source("let b = 3.5").statements,
                          [Let("b", Number(3.5, 1), 1)])
 
-    def test_unknown_method_lists_the_choices(self):
-        error = error_in("parse", "a.add(1)")
-        self.assertEqual(error.line, 1)
-        self.assertIn('"add"', error.message)
-        self.assertIn("remove, pop", error.message)
+    def test_unknown_method_name_now_parses(self):
+        # Since classes, the parser accepts any action name (objects have
+        # their own); the checker explains it for a list (see CheckerTests).
+        statement = parse_source("a.add(1)").statements[0]
+        self.assertEqual(statement.call.method, "add")
 
     def test_missing_method_name(self):
         self.assertIn("must be followed", error_in("parse", "a.").message)
@@ -123,8 +123,13 @@ class ParserTests(unittest.TestCase):
                       error_in("parse", "5.pop(1)").message)
 
     def test_chained_method_is_an_error(self):
+        # `a.pop` is now read as a thing called "pop" (objects have such
+        # things), so the parser accepts it and the checker rejects it.
+        parse_source("a.pop.pop(1)")
+
+    def test_bare_list_action_needs_parentheses(self):
         self.assertIn("needs parentheses",
-                      error_in("parse", "a.pop.pop(1)").message)
+                      error_in("parse", "a.pop").message)
 
 
 class CheckerTests(unittest.TestCase):

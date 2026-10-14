@@ -1,9 +1,10 @@
 """AST nodes: the tree the parser builds and later stages walk.
 
 Statements: Let, Assign, Show, Echo, CallStatement, MethodStatement, Give,
-If, For, Function, AssignIndex.
+If, For, Function, AssignIndex, AssignAttribute, ClassDef.
 Expressions: Number, Text, Name, BinaryOp, Negate, Call, ListLiteral, Index,
-MethodCall (only so the checker can explain it is not a value).  A
+Attribute (d.name), MethodCall (a list action such as a.pop(1), or an
+action of an object such as d.speak()).  A
 Compare (such as x > 5) is a condition: it only appears in an if or elif
 line.  Every node remembers the `line` it came from, so the checker and
 the generator can report friendly, line-numbered errors.
@@ -75,16 +76,37 @@ class Compare:
 
 @dataclass
 class MethodCall:
-    """A list action such as a.remove("Dog") or a.pop(3).
+    """A call after a dot: a list action or an action of an object.
 
-    `target` is the list's name. It changes the list and gives nothing
-    back, so the checker only allows it as a whole line (MethodStatement).
+    `a.remove("Dog")` and `a.pop(3)` are list actions: they change the list
+    and give nothing back, so the checker only allows them as a whole line
+    (MethodStatement). `d.speak()` runs an action (a function written inside
+    a class) of an object, and `super.init(1)` runs the parent's action.
+
+    `target` is a Name (a variable, `self` or `super`) or an Attribute
+    (`self.pet.speak()`). The checker fills in `target_kind` ("list",
+    "object", "super" or "unknown") so the generator knows how to write it.
     """
 
-    target: Name
-    method: str  # one of LIST_METHODS
+    target: "Expression"
+    method: str
     args: list["Expression"]
     line: int
+    target_kind: str = "unknown"
+
+
+@dataclass
+class Attribute:
+    """A thing an object remembers, read as a value: d.name or self.age.
+
+    The checker sets `target_kind` to "object" when it knows the target is
+    an object (the generator then writes plain `d.name`).
+    """
+
+    target: "Expression"
+    name: str
+    line: int
+    target_kind: str = "unknown"
 
 
 @dataclass
@@ -104,7 +126,7 @@ class Index:
 LIST_METHODS = ("remove", "pop")
 
 Expression = (Number | Text | Name | BinaryOp | Negate | Call | ListLiteral
-              | Index | MethodCall)
+              | Index | MethodCall | Attribute)
 
 
 @dataclass
@@ -129,6 +151,16 @@ class AssignIndex:
 
     target: Name
     index: Expression
+    value: Expression
+    line: int
+
+
+@dataclass
+class AssignAttribute:
+    """d.name = value: give an object a thing to remember (or change it)."""
+
+    target: Expression
+    name: str
     value: Expression
     line: int
 
@@ -206,8 +238,19 @@ class Function:
     line: int
 
 
-Statement = (Let | Assign | AssignIndex | Show | Echo | CallStatement | MethodStatement
-             | Give | If | For | Function)
+@dataclass
+class ClassDef:
+    """class Name: or class Name(Parent): with its functions (the actions)."""
+
+    name: str
+    parent: str | None
+    methods: list[Function]
+    line: int
+
+
+Statement = (Let | Assign | AssignIndex | AssignAttribute | Show | Echo
+             | CallStatement | MethodStatement | Give | If | For | Function
+             | ClassDef)
 
 
 @dataclass

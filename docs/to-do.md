@@ -140,6 +140,57 @@ The request, as written by the owner: "also add a function like listName[1] whic
 - [x] `pop` is unchanged (it still rejects negative positions)
 - [x] `examples/indexing.scy` and tests for every stage (`tests/test_indexing.py`)
 
+## Done: classes
+
+The request, as written by the owner: "implement classes just like in python."
+
+The design, kept Python-shaped but in Scripty's words (the first example is
+`examples/classes.scy` and is also in the tests):
+
+```
+class Dog:
+    function init(self, name, age):
+        self.name = name
+        self.age = age
+    function speak(self):
+        give self.name + " says woof"
+    function birthday(self):
+        self.age = self.age + 1
+
+class Puppy(Dog):
+    function speak(self):
+        give self.name + " says yip"
+
+let d = Dog("Rex", 3)
+show d.speak()
+d.birthday()
+show d.age
+d.name = "Max"
+let p = Puppy("Bit", 1)
+show p.speak()
+```
+
+Output: `Rex says woof`, `4`, `Bit says yip`.
+
+### Progress
+
+- [x] `class Name:` with an indented body of `function` lines only (the actions); top level only
+- [x] `class Child(Parent):` single inheritance; actions inherited and overridable; the parent must be a class written above
+- [x] `init` is the constructor (`Dog("Rex", 3)` makes an object); no `init` means no inputs; the number of inputs is checked (inherited `init` counts)
+- [x] The first input of every action must be `self` (friendly error otherwise); `self` is not passed when calling (`d.speak()`)
+- [x] Attributes: read `d.name` / `self.name`, write `d.name = value` / `self.name = value`; reading one that nothing ever sets is a friendly error
+- [x] Action calls as values (`show d.speak()`) and as lines (`d.birthday()`), with the same `give` rules as functions; `self.other()` works
+- [x] `super.init(args)` runs the parent's `init` (and `super.name(args)` the parent's other actions)
+- [x] Objects are a kind in the checker (same class or a child class on reassignment); `==` / `!=` mean the same object; calculations, `< >`, `for`, `[ ]` and `len` on objects are friendly errors; objects work in lists, functions and other objects
+- [x] `show d` prints `<Dog object>`
+- [x] List actions `a.remove(...)`, `a.pop(...)` and `sort(a)` work exactly as before (a method call resolves by what the target is; unknown kinds are decided while running)
+- [x] Python names that clash (`def`, `None`, an attribute called `class`, ...) get the `_scy` suffix; `scripty build` shows readable Python classes
+- [x] Friendly errors with the Scripty line at every stage, also for errors inside actions
+- [x] `class` is a reserved word (`self` and `super` too); noted in the changelog
+- [x] `examples/classes.scy` and tests for every stage (`tests/test_classes.py`)
+
+Left out on purpose (ideas for later): several parents, a customised text for `show d`, calling an action on a call result (`Dog("a", 1).speak()`), class-level values.
+
 ## Later
 
 - [ ] AI features (later)

@@ -80,6 +80,7 @@ python scripty.py run examples/loops.scy
 python scripty.py run examples/lists.scy
 python scripty.py run examples/list_methods.scy
 python scripty.py run examples/indexing.scy
+python scripty.py run examples/classes.scy
 ```
 
 ## See the Python that Scripty makes

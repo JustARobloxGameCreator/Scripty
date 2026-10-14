@@ -4,6 +4,22 @@ All notable changes to Scripty are recorded here, newest first.
 
 ## [Unreleased]
 
+### Added (lists, built-in functions and reassignment)
+- List literals: `[1, 2, 3]`, `["a", "b"]`, `[]`, with any expressions inside. Lists hold numbers or text (mixed is allowed). A trailing comma, a missing `]` and a list inside a list are friendly errors. New `[` and `]` tokens and a `ListLiteral` tree node.
+- Built-in functions: `max(list)` (alphabetical for text), `min(list)`, `len(list or text)` and `sort(list)`. `sort(a)` sorts the list itself and is used as a line on its own (`let b = sort(a)` is a friendly error). An empty list in `max`/`min` is a friendly run-time error (`max needs at least one item, but the list is empty.`); sorting a list that mixes numbers and text is a friendly run-time error too. Wrong number of inputs or a known non-list is a checker error.
+- Reassignment: `name = value` (no `let`) gives an existing variable a new value, with an `Assign` tree node. The name must be visible there, and the new value must be the same kind (number, text, list) when both are known. Function inputs may be reassigned.
+- `show a` prints a list as `[0, 2, 3, 4, 6]`; text items are shown in double quotes (`["Ana", "Bo"]`). Numbers and text print exactly as before.
+- `list + list` joins two lists; `==` and `!=` work on lists. Other calculations and `> < >= <=` with lists are friendly errors.
+- `for item in list:` goes through the items of a list.
+- `examples/lists.scy` and 72 new tests in `tests/test_lists.py` covering every stage and the to-do program (412 in total).
+
+### Changed (lists, built-in functions and reassignment)
+- `max`, `min`, `len` and `sort` are built-in names: they can no longer be used as variable, input, loop variable or function names (programs using `min` or `len` as names must rename them).
+- The "already declared" error now also says how to change the value (`write: x = ... (without let)`).
+- A line such as `x = 5` used to be a syntax error; it is now reassignment (an error from the checker if `x` does not exist).
+- The `for` error became `You can only go through text or a list with for, but 5 is a number.` (same at run time). The loop variable over a function input is now of unknown kind instead of text, so it accepts more programs, never fewer.
+- Existing tests changed only for these messages (the `for` messages, and the parser test that used `x = 5` as an example of a bad line, now `x + 5`).
+
 ### Added (public release, issue #16)
 - `README.md`: what Scripty is, what you need (Python 3.10+), how to download it, and how to run `.scy` files (`run`, `build`, the Windows launcher, running your own file, the examples, errors, tests). It does not teach the language itself yet.
 

@@ -70,6 +70,36 @@ d
 - [x] Generated Python `for` with a correct line map
 - [x] `examples/loops.scy` and tests for every stage
 
+## Done: lists, max and sort (reassignment)
+
+You have to implement the functions below:
+
+```
+let a = [0, 1, 3]
+
+show max(a) // output: 3
+
+a = [0, 4, 2, 6, 3]
+
+sort(a) // python has a function for this as long as i remember
+
+show a
+```
+
+Output: `3` then `[0, 2, 3, 4, 6]`.
+
+### Progress
+
+- [x] List literals `[1, 2, 3]`, `[]`, text lists, any expressions inside (no trailing comma, no list inside a list)
+- [x] `max(list)`; also `min(list)` and `len(list or text)`; empty list gives a friendly error
+- [x] `sort(list)` sorts the list itself, as a line on its own (`let b = sort(a)` is a friendly error)
+- [x] `max`, `min`, `len`, `sort` are built-in names (friendly error if used as variable or function names)
+- [x] Reassignment `name = value` without `let` (same kind of value, name must exist, scope rules documented)
+- [x] `show a` prints the whole list: `[0, 2, 3, 4, 6]`
+- [x] `list + list`, `==` / `!=` on lists, `for item in list:`
+- [x] Friendly errors for all of the above, with the Scripty line
+- [x] `examples/lists.scy` and tests for every stage and the to-do program
+
 ## Later
 
 - [ ] AI features (later)

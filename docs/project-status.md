@@ -1,6 +1,6 @@
 # Project Status
 
-_Last updated: 2026-10-13_
+_Last updated: 2026-10-14_
 
 ## How to run and test
 
@@ -13,7 +13,7 @@ scripty run hello.scy                # Windows only, uses scripty.bat
 python -m unittest discover -s tests -t . -v   # run all tests
 ```
 
-Examples live in `hello.scy` and `examples/` (`text.scy`, `conditions.scy`, `functions.scy`, `loops.scy`). Errors are shown as `Error on line N: ...`, never as a Python traceback.
+Examples live in `hello.scy` and `examples/` (`text.scy`, `conditions.scy`, `functions.scy`, `loops.scy`, `lists.scy`). Errors are shown as `Error on line N: ...`, never as a Python traceback.
 
 ## What are the project milestones?
 
@@ -35,6 +35,8 @@ Examples live in `hello.scy` and `examples/` (`text.scy`, `conditions.scy`, `fun
 - Milestone 2, part 1 done: conditions (`if`/`elif`/`else` with `== != >= <= > <`) and functions (`function`, `give`, calls, recursion), `//` comments and 4-space indented blocks, with tests for every stage (issues #12 and #14). The tasks in `docs/to-do.md` are ticked off.
 - Milestone 2, part 2 done: `for NAME in VALUE:` loops over the characters of a text (issue #13), at the top level, in functions and in `if` branches, with friendly errors and tests for every stage (340 tests). `examples/loops.scy` shows them.
 
+- Milestone 2, part 3 done: lists (`[1, 2, 3]`), `max`, `min`, `len` and `sort`, reassignment with `x = value`, `show` of a whole list, and `for` over a list (`docs/to-do.md`, 412 tests). `examples/lists.scy` shows them.
+
 - Milestone 3, part 1 done: `README.md` added for the public release (issue #16). It explains how to get Scripty and how to run `.scy` files. A guide to using the language is still to come.
 
 ## What's next?
@@ -53,4 +55,4 @@ Milestone 1 (v0.1) is complete. Milestone 2 is in progress:
 3. Loops (done, #13).
 4. The AI features (next).
 
-Ideas noticed along the way, not yet planned: looping over a number range, `break`, `and`/`or`, reassigning a variable, letting functions read global variables.
+Ideas noticed along the way, not yet planned: looping over a number range, `break`, `and`/`or`, letting functions read global variables, getting one item of a list by position, adding items to a list, lists inside lists, copying a list on `let b = a` (today both names share one list).

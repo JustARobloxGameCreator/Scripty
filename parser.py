@@ -361,6 +361,11 @@ class _Parser:
                 "Did you add one ) too many?",
                 token.line,
             )
+        elif token.kind == DOT and self.tokens[self.pos - 1].kind == RPAREN:
+            raise ScriptyError(
+                'A "." can\'t come right after a closing ")" yet. Keep the '
+                "answer in a variable first, like: let d = Dog(\"Rex\", 3) "
+                "and then: d.speak()", token.line)
         elif token.kind == DOT:
             raise _dot_error(token)
         elif token.kind == OPERATOR and token.value in COMPARISONS:

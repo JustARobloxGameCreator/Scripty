@@ -4,6 +4,37 @@ All notable changes to Scripty are recorded here, newest first.
 
 ## [Unreleased]
 
+### Added (indexing)
+- `name[index]` gives one item of a list or one character of a text, like Python: `show a[1]`, `show a[-1]`, `show "hello"[1]`. Positions start at 0 and a negative position counts from the end (`a[-1]` is the last item). The position can be any expression (`a[i + 1]`, `a[len(a) - 1]`, `a[4 / 2]`). It is an expression, so it works anywhere a value does: `show`, `let`, calculations, conditions, function inputs, inside list literals, as the value of a `for`, and as the input of `remove` or `pop`. `words[0][1]` (a character of the first text item) works too.
+- `a[1] = 9` replaces one item of an existing list (a line on its own). The new value may be any number or text (items can be mixed). Text can't be changed this way (friendly error); only a plain name can be on the left (`a[0][1] = 9` is an error).
+- Friendly errors with the Scripty line: a position that is too big or too negative (`The list has 3 items (positions 0 to 2, or -1 to -3 from the end), so there is no item at position 3.`), an empty list or text, a decimal or text position (checked in the program when written, while running when worked out), indexing a number (`You can only use [ ] on a list or a text, but "n" is a number.`), assigning into text, an undeclared name, `a[]`, a missing `]`, and a line that is only `a[1]`.
+- New tree nodes `Index` and `AssignIndex`. The checker gives `a[i]` the kind text for a known text and unknown for a list (items may be mixed), so `a[1] + 1` has no false errors.
+- Generator: `a[1]` becomes `get_at(a, 1)` and `a[1] = 9` becomes `set_at(a, 1, 9)`; the runner provides both helpers (next to `remove_all` and `pop_at`), so out-of-range errors report the real numbers on the Scripty line. A variable named `get_at` or `set_at` gets the `_scy` suffix in the generated code.
+- `examples/indexing.scy` (also in the README commands) and 84 new tests in `tests/test_indexing.py` (556 in total).
+
+### Changed (indexing)
+- A line that starts with `name[` (such as `a[1]`) used to be `I don't understand a line that starts with "a"`. It is now either an assignment (`a[1] = 9`) or a friendlier error. The "I don't understand a line" error text also mentions list items now.
+- `a [1]` (with a space) means the same as `a[1]`.
+- `pop` is unchanged: `a.pop(-1)` is still an error, while `a[-1]` counts from the end.
+- All 472 existing tests pass unchanged.
+
+### Added (list actions: remove and pop)
+- `name.remove(value)` removes EVERY item equal to `value` from the list (the value can be text, a number, a variable or any expression). If nothing matches, Scripty prints `Warning on line N: "Dog" is not in the list, so nothing was removed.` to **stderr** (so the program's normal output stays clean) and keeps running; the exit code stays 0. Text and numbers never match each other (`"1"` does not remove `1`), with no error.
+- `name.pop(index)` removes the item at that position. Positions start at 0, like `listName[3]` in the to-do. A position that is too big (`Error on line 3: The list has 3 items (positions 0 to 2), so there is no item at position 3.`), an empty list, a negative position, a decimal such as `1.5` and a non-number are friendly errors. A whole number that is the result of a division (`4 / 2` is `2.0`) is accepted.
+- Both are lines on their own, like `sort(a)`. Using one as a value (`let x = a.pop(1)`) is a friendly error saying it changes the list and gives nothing back. Lists are shared like before: `let b = a` followed by `a.remove(1)` also changes `b`.
+- New `.` token and `MethodCall` / `MethodStatement` tree nodes. Decimal numbers such as `1.5` still lex as one number. A `.` anywhere else (`.5`, `5.`, `5.pop(1)`, `a.remove(1).pop(2)`) is a friendly error, and an unknown action (`a.add(1)`) lists the available ones (remove, pop).
+- Checker: the name must be a visible list or function input (an unknown name gives the usual `I don't know what "z" is` error, a known number or text gives `remove only works on lists, but "n" is a number.`), exactly one input is required, and scope rules are unchanged (a function can only touch its own inputs and lets). Inputs of unknown kind are checked while the program runs, with friendly messages.
+- Generator: `a.remove("Dog")` becomes `remove_all(a, 'Dog', 3)` (the last input is the Scripty line, used for the warning) and `a.pop(3)` becomes `pop_at(a, 3)`. `sort(a)` is unchanged (`a.sort()`).
+- Runner: `remove_all` and `pop_at` are small helpers given to the program, like the custom `print`. `scripty build` shows the calls but not the helpers.
+- `examples/list_methods.scy` (also in the README commands) and 60 new tests in `tests/test_list_methods.py` (472 in total).
+
+### Changed (list actions: remove and pop)
+- `remove` and `pop` are NOT reserved: they are still fine as variable names (the action name comes after the dot).
+- In the generated Python, a variable, input or function named `remove_all` or `pop_at` now gets the `_scy` suffix (like `print`), so it cannot clash with the helpers.
+- The "I don't understand a line that starts with" error now also mentions list actions like `a.pop(1)`.
+- A `.` used to be an `I don't know what "."` lexer error; it is now a token, and a "." in the wrong place gets a parser error instead (still a friendly error, but from a different stage and with different words).
+- All 412 existing tests pass unchanged.
+
 ### Added (lists, built-in functions and reassignment)
 - List literals: `[1, 2, 3]`, `["a", "b"]`, `[]`, with any expressions inside. Lists hold numbers or text (mixed is allowed). A trailing comma, a missing `]` and a list inside a list are friendly errors. New `[` and `]` tokens and a `ListLiteral` tree node.
 - Built-in functions: `max(list)` (alphabetical for text), `min(list)`, `len(list or text)` and `sort(list)`. `sort(a)` sorts the list itself and is used as a line on its own (`let b = sort(a)` is a friendly error). An empty list in `max`/`min` is a friendly run-time error (`max needs at least one item, but the list is empty.`); sorting a list that mixes numbers and text is a friendly run-time error too. Wrong number of inputs or a known non-list is a checker error.

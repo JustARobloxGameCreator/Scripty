@@ -100,6 +100,28 @@ Output: `3` then `[0, 2, 3, 4, 6]`.
 - [x] Friendly errors for all of the above, with the Scripty line
 - [x] `examples/lists.scy` and tests for every stage and the to-do program
 
+## Done: remove and pop
+
+The request, as written by the owner:
+
+```
+listName.remove("Dog")  // if "Dog" is in the list, remove every item that is "Dog".
+                        // If it isn't, give a warning and continue running the code.
+listName.pop(3)         // remove the item listName[3] from the list
+```
+
+### Progress
+
+- [x] `name.remove(value)`: removes EVERY item equal to the value (text, number, variable or any expression)
+- [x] Nothing matches: `Warning on line N: "Dog" is not in the list, so nothing was removed.` goes to stderr, the program keeps running and exits with code 0
+- [x] `name.pop(index)`: removes the item at that position (the first item is position 0)
+- [x] `pop` errors: too big (`The list has 3 items (positions 0 to 2), ...`), empty list, negative, decimal, not a number
+- [x] New `.` token; a `.` anywhere else (`.5`, `5.pop(1)`, `a.remove(1).pop(2)`) is a friendly error; an unknown action lists the choices (remove, pop)
+- [x] Both are lines on their own (like `sort(a)`); using them as a value (`let x = a.pop(1)`) is a friendly error
+- [x] Checker: the name must be a visible list (a known number or text is an error), exactly one input, scope rules unchanged
+- [x] Generated Python: `remove_all(a, 'Dog', LINE)` and `pop_at(a, 3)` (helpers given to the program by the runner)
+- [x] `examples/list_methods.scy` and tests for every stage (`tests/test_list_methods.py`)
+
 ## Later
 
 - [ ] AI features (later)

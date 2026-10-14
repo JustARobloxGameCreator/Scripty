@@ -49,12 +49,13 @@ Implemented in `lexer.py` as `tokenize(source) -> list[Token]`. A `Token` has `k
 ### 4. Parser (tokens -> AST)
 Checks that tokens follow the grammar and builds the syntax tree. Catches syntax errors such as `let = 5` or a missing value.
 
-Implemented in `parser.py` as `parse(tokens) -> Program`. The tree nodes are simple dataclasses in `ast_nodes.py`: statements `Let(name, value, line)`, `Assign(name, value, line)` (a new value for an existing variable), `Show(value, line)`, `Echo(value, line)`, `CallStatement(call, line)`, `MethodStatement(call, line)`, `Give(value, line)`, `If(branches, else_body, else_line, line)` (each `Branch(condition, body, line)` is an `if` or `elif` part), `For(name, iterable, body, line)` and `Function(name, params, body, line)`; expressions `Number`, `Text`, `Name`, `BinaryOp(op, left, right, line)`, `Negate(operand, line)`, `Call(name, args, line)`, `ListLiteral(items, line)` and `MethodCall(target, method, args, line)` (a list action such as `a.pop(1)`; `target` is a `Name`; it is an expression node only so the checker can explain that it is not a value). A `Compare(op, left, right, line)` is a condition and only appears in `if`/`elif`. A `Program` holds the list of statements. Every node keeps its line number.
+Implemented in `parser.py` as `parse(tokens) -> Program`. The tree nodes are simple dataclasses in `ast_nodes.py`: statements `Let(name, value, line)`, `Assign(name, value, line)` (a new value for an existing variable), `AssignIndex(target, index, value, line)` (`a[1] = 9`; `target` is a `Name`), `Show(value, line)`, `Echo(value, line)`, `CallStatement(call, line)`, `MethodStatement(call, line)`, `Give(value, line)`, `If(branches, else_body, else_line, line)` (each `Branch(condition, body, line)` is an `if` or `elif` part), `For(name, iterable, body, line)` and `Function(name, params, body, line)`; expressions `Number`, `Text`, `Name`, `BinaryOp(op, left, right, line)`, `Negate(operand, line)`, `Call(name, args, line)`, `ListLiteral(items, line)`, `Index(target, index, line)` (`a[1]`, `"hello"[0]`; `target` is any expression) and `MethodCall(target, method, args, line)` (a list action such as `a.pop(1)`; `target` is a `Name`; it is an expression node only so the checker can explain that it is not a value). A `Compare(op, left, right, line)` is a condition and only appears in `if`/`elif`. A `Program` holds the list of statements. Every node keeps its line number.
 
 Grammar (recursive descent, one function per rule):
 
 ```
 statement  = "let" NAME "=" expression | NAME "=" expression
+           | NAME "[" expression "]" "=" expression
            | "show" expression | "echo" "(" expression ")"
            | call | NAME "." method | "give" expression
            | "function" NAME "(" [ NAME { "," NAME } ] ")" block
@@ -64,7 +65,8 @@ block      = ":" NEWLINE INDENT { statement } DEDENT
 condition  = expression COMPARE expression | "(" condition ")"
 expression = term { ("+" | "-") term }
 term       = factor { ("*" | "/") factor }
-factor     = "-" factor | NUMBER | TEXT | call | NAME | list | "(" expression ")"
+factor     = "-" factor | primary { "[" expression "]" }
+primary    = NUMBER | TEXT | call | NAME | list | "(" expression ")"
 list       = "[" [ expression { "," expression } ] "]"
 call       = NAME "(" [ expression { "," expression } ] ")"
 method     = ("remove" | "pop") "(" [ expression { "," expression } ] ")"
@@ -79,6 +81,7 @@ method     = ("remove" | "pop") "(" [ expression { "," expression } ] ")"
 - `name = value` (no `let`) is a statement of its own and gives an existing variable a new value. The parser only checks the shape; the checker checks that the name exists. `x = 5` used to be a syntax error and is now valid.
 - `for NAME in VALUE:` runs its indented body once per character of a text or once per item of a list. It is allowed at the top level, inside functions and inside `if` branches, and loops, `if`s and `give` may be nested inside a loop. A `function` cannot be written inside a loop.
 - A list action is `name.remove(value)` or `name.pop(index)`, written as a whole line. The parser accepts only a name before the dot and the two action names after it; an unknown action (`a.add(1)`) gets an error listing them, a missing `(` or `)` gets the usual call errors, and a `.` anywhere else (`.5`, `5.pop(1)`, `a.pop(1).pop(2)`) gets `A "." only works right after the name of a list...`. `remove` and `pop` are not reserved words: they are still valid variable names.
+- **Indexing.** `[ ]` right after a value picks one item: `a[1]`, `a[-1]`, `a[i + 1]`, `"hello"[1]`, `F(1)[0]`, `(a + b)[2]`, and chained like `words[0][1]`. The parser lets it follow any value and leaves the meaning to the checker. It binds tighter than everything else, so `-a[0]` is `-(a[0])` and `a[0] + b[1] * 2` takes both items first. Spaces do not matter: `a [1]` is the same as `a[1]`. `let x = [1, 2]` is still a list, because a list starts a value while indexing follows one. A line that starts with `name[` must be an assignment `a[1] = 9`; only a plain name can be on the left (`a[0][1] = 9` is an error), and a line that is only `a[1]` is an error that says how to show or change the item. `a[]` and a missing `]` are friendly errors.
 - A call can be a value (`let r = Add(1, 2)`, `show Add(1, 2)`) or a whole line (`Greet("Ana")`).
 - Friendly `for` errors: missing loop name, missing `in`, missing value, missing colon, missing body, wrong indentation, a keyword used as the loop name, `in` outside a `for`.
 - Friendly errors: missing colon, missing or empty body, text after the colon on the same line, unexpected indent, missing function name/parentheses/commas, `give` outside a function, missing condition or comparison.
@@ -101,6 +104,7 @@ Implemented in `checker.py` as `check(program) -> Program`. It returns the same 
 - **Lists.** A list holds numbers or text; mixing them is allowed (sorting or `max` of a mixed list is a friendly run-time error). A list inside a list is rejected (`A list can't hold another list yet.`). `list + list` joins two lists into a new list; every other calculation with a list (`* - /`, list + number, minus sign) is an error, and `> < >= <=` do not work on lists, while `==` and `!=` do.
 - **Built-in functions.** `max(list)`, `min(list)`, `len(list or text)` and `sort(list)`. Their names are reserved: using `max`, `min`, `len` or `sort` as a variable, input, loop variable or function name is an error (so existing programs that used `min` or `len` as names must rename them). They need exactly 1 input, and a known number or text (a list for `max`/`min`/`sort`) is an error; unknown kinds are accepted. `sort(a)` sorts the list itself (in place), gives nothing back, and is only allowed as a line on its own with a variable (`sort(a)`); `let b = sort(a)` is an error that explains this. `max(a)`, `min(a)` and `len(a)` give answers, so they cannot stand alone on a line (`show max(a)`). `max`/`min` results have an unknown kind; `len` gives a number.
 - **List actions.** `name.remove(value)` and `name.pop(index)` are checked like `sort(a)`: only as a line on their own (`let x = a.pop(1)` is an error saying the action changes the list and gives nothing back), the name must be a visible variable or input (the usual unknown-name and function-scope errors apply, so a function can only touch its own lists), a known number or text is an error (`remove only works on lists, but "n" is a number.`), and exactly one input is required. For `pop`, a known text or list, a decimal literal such as `1.5` and a negative literal such as `-1` are errors too. Unknown kinds (function inputs, call results, calculations) are accepted and checked by the runner.
+- **Indexing.** `a[1]` works on a list or a text anywhere a value can be used; a known number is an error (`You can only use [ ] on a list or a text, but "n" is a number.`), and undeclared names and function scopes behave as usual. The position must be a whole number: a known text or list, or a decimal written in the program (`a[1.5]`, `a[-1.5]`), is an error; a position worked out while running (`4 / 2` is `2.0`) is accepted and checked by the runner. The kind of `a[i]` is text for a known text and *unknown* for everything else (a list's items may be mixed), so `a[1] + 1` and `show a[1]` never give false errors. `a[1] = 9` needs a visible name; a known number is an error, text is an error (`Text can't be changed one character at a time ...`), and the new value can be anything except a list (lists inside lists are not supported); its kind is not compared with the old item.
 - **Types.** Every value is a number, text or a list; the checker remembers the kind of each variable from its `let`. Numbers work with `+ - * /`. Text can only be joined with other text using `+` (concatenation, `"a" + "b"` is `ab`). Everything else is an error with the operator's line: `"a" + 1`, `"a" * "b"`, `-"a"`, e.g. `You can't use "+" to mix text and a number. ...`. The checker is the primary defence; the runner's TypeError translation is the safety net.
 
 ### 6. Generator (AST -> Python text)
@@ -111,7 +115,7 @@ Implemented in `generator.py` as `generate(program) -> (python_source, line_map)
 - One Python line per statement or block header (`def`, `if`, `elif`, `else`, `for`), indented 4 spaces per level. `function F(a):` becomes `def F(a):`, `if (c):` becomes `if c:`, `for c in "hi":` becomes `for c in 'hi':`, `give x` becomes `return x`; calls and comparisons are written as they are. `line_map` is a dict from Python line number to Scripty line number (blank lines and comments in Scripty do not exist in the Python, so the numbers differ).
 - Text is written with `repr`, so quotes and backslashes are always safe.
 - The tree is preserved exactly: every operation nested in another gets parentheses (`1 + 2 * 3` -> `1 + (2 * 3)`).
-- A list is a Python list: `[1, 2]` -> `[1, 2]`. `max(a)`, `min(a)` and `len(a)` keep their names, and `sort(a)` becomes `a.sort()`, which sorts the list itself. `a.remove("Dog")` becomes `remove_all(a, 'Dog', 3)` (3 is the Scripty line, needed for the warning) and `a.pop(3)` becomes `pop_at(a, 3)`; names that clash with these helpers get the `_scy` suffix. `name = value` -> `name = value`. `show a` is still `print(a)` (the runner prints lists in the Scripty way).
+- A list is a Python list: `[1, 2]` -> `[1, 2]`. `max(a)`, `min(a)` and `len(a)` keep their names, and `sort(a)` becomes `a.sort()`, which sorts the list itself. `a.remove("Dog")` becomes `remove_all(a, 'Dog', 3)` (3 is the Scripty line, needed for the warning) and `a.pop(3)` becomes `pop_at(a, 3)`; names that clash with these helpers get the `_scy` suffix. `name = value` -> `name = value`. `a[1]` becomes `get_at(a, 1)` and `a[1] = 9` becomes `set_at(a, 1, 9)` (helpers, so the runner can give friendly errors that include the length). `show a` is still `print(a)` (the runner prints lists in the Scripty way).
 - Division is **true division** (Python `/`): `7 / 2` is `3.5`, `4 / 2` is `2.0`.
 - A variable, function or input named like a Python keyword (`class`) or `print` is renamed with a `_scy` suffix in the generated code. Every generated line, including `elif` and `else:`, has an entry in the line map.
 
@@ -123,6 +127,7 @@ Implemented in `runner.py` as `run_python(source, line_map)`. The code is compil
 - `ZeroDivisionError`: `You tried to divide by zero. Dividing by zero has no answer.`
 - `TypeError` from a `for` over a number ("... is not iterable"): `You can only go through text or a list with for, but this value is a number.` (for `max`/`min`/`sort` of a number the message says they need a list). Comparing or sorting text with a number: `You tried to compare (or sort or find the max of) text with a number. ...`. `len` of a number, `sort` of a non-list, and `max`/`min` of an empty list (`max needs at least one item, but the list is empty.`) are friendly too. Any other `TypeError`: mixing text and numbers.
 - `remove_all` / `pop_at` (helpers the runner puts in the program's globals, next to the custom `print`): `remove_all(items, value, line)` removes every item equal to `value` in place, and if nothing matched it prints `Warning on line N: "Dog" is not in the list, so nothing was removed.` to **stderr** and carries on (exit code 0, stdout untouched; the value is shown the Scripty way, text in double quotes). `pop_at(items, index)` removes `items[index]` in place. Both raise a `ListActionError` (a friendly message, shown with the Scripty line from the line map) when the value is not a list; `pop_at` also reports a position that is not a whole number (`1.5`; `2.0` is accepted), is negative (`Positions start at 0 and can't be negative...`) or is too big (`The list has 3 items (positions 0 to 2), so there is no item at position 3.`, or `The list is empty, ...`).
+- `get_at` / `set_at` (helpers too): `get_at(items, index)` is `a[index]` and `set_at(items, index, value)` is `a[index] = value`. Python rules: the first position is 0 and a negative position counts from the end (`-1` is the last item). They accept a list (or a text for `get_at`), and a position that is a whole number (`2.0` is fine). Friendly errors, all shown with the Scripty line: too big or too negative (`The list has 3 items (positions 0 to 2, or -1 to -3 from the end), so there is no item at position 3.`; one item: `(only position 0, or -1 from the end)`; for text `The text has 5 characters ...  no character at position 9.`), an empty list or text (`The list is empty, so there is no item at position 0.`), a decimal or non-number position, a number instead of a list or text, and `set_at` on a text. Note: `a.pop(index)` still rejects negative positions; only `[ ]` counts from the end.
 - `NameError`: `I don't know what "z" is. ...`
 - `RecursionError`: a function kept calling itself and never stopped.
 - `OverflowError`: the number is too big.
@@ -195,6 +200,9 @@ show a        // [0, 2, 3, 4, 6]
 a.remove(4)
 a.pop(0)
 show a        // [2, 3, 6]
+show a[0]     // 2
+a[0] = 9
+show a        // [9, 3, 6]
 ```
 
 See `examples/lists.scy` and `examples/list_methods.scy`. Notes:
@@ -203,7 +211,8 @@ See `examples/lists.scy` and `examples/list_methods.scy`. Notes:
 - Lists are shared, like in Python: after `let b = a`, `sort(a)` also changes what `b` shows, and a function that sorts its input sorts the caller's list. Use `let b = a + []` to make a separate copy.
 - `show` of a list: numbers as `[1, 2.5]`, text in double quotes as `["a", "b"]`, empty as `[]`.
 - `a.remove(value)` removes every item equal to `value`; if there is none, a warning goes to stderr and the program keeps running. `a.pop(index)` removes the item at that position (the first is 0). Both change the list itself, so they are lines on their own and give nothing back.
-- Not supported yet: lists inside lists, getting one item by position, adding items one at a time.
+- `a[1]` gives the item at a position and `a[1] = 9` replaces it (the first position is 0, negative positions count from the end, like Python). It also works on text: `"hello"[1]` is `e`. See `examples/indexing.scy`.
+- Not supported yet: lists inside lists, adding items one at a time, slices such as `a[1:3]`.
 
 ## Growing the language
 

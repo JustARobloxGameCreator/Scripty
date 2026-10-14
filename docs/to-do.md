@@ -122,6 +122,24 @@ listName.pop(3)         // remove the item listName[3] from the list
 - [x] Generated Python: `remove_all(a, 'Dog', LINE)` and `pop_at(a, 3)` (helpers given to the program by the runner)
 - [x] `examples/list_methods.scy` and tests for every stage (`tests/test_list_methods.py`)
 
+## Done: indexing
+
+The request, as written by the owner: "also add a function like listName[1] which is the same as in python."
+
+### Progress
+
+- [x] `name[index]` gives one item of a list or one character of a text; positions start at 0, like Python
+- [x] Negative positions count from the end (`a[-1]` is the last item)
+- [x] The position can be any expression (`a[i + 1]`, `a[len(a) - 1]`); a whole decimal such as `4 / 2` is accepted
+- [x] Works anywhere a value does: `show`, `let`, calculations, conditions, function inputs, list literals, `for`, `remove` and `pop` inputs
+- [x] Works on text too (`"hello"[1]`, `word[0]`) and on an item of a text list (`words[0][1]`)
+- [x] `a[1] = 9` replaces one item of a list (text can't be changed one character at a time: friendly error)
+- [x] Friendly errors: position too big or too negative (with the length and the valid positions), empty list or text, decimal or non-number position, indexing a number, undeclared name, `a[]`, missing `]`
+- [x] Checker: `a[i]` has unknown kind for lists (no false errors for mixed lists) and text kind for text
+- [x] Generated Python: `get_at(a, 1)` and `set_at(a, 1, 9)` (helpers given to the program by the runner)
+- [x] `pop` is unchanged (it still rejects negative positions)
+- [x] `examples/indexing.scy` and tests for every stage (`tests/test_indexing.py`)
+
 ## Later
 
 - [ ] AI features (later)

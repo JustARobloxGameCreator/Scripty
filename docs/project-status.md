@@ -13,7 +13,7 @@ scripty run hello.scy                # Windows only, uses scripty.bat
 python -m unittest discover -s tests -t . -v   # run all tests
 ```
 
-Examples live in `hello.scy` and `examples/` (`text.scy`, `conditions.scy`, `functions.scy`, `loops.scy`, `lists.scy`, `list_methods.scy`). Errors are shown as `Error on line N: ...`, never as a Python traceback.
+Examples live in `hello.scy` and `examples/` (`text.scy`, `conditions.scy`, `functions.scy`, `loops.scy`, `lists.scy`, `list_methods.scy`, `indexing.scy`). Errors are shown as `Error on line N: ...`, never as a Python traceback.
 
 ## What are the project milestones?
 
@@ -39,6 +39,8 @@ Examples live in `hello.scy` and `examples/` (`text.scy`, `conditions.scy`, `fun
 
 - Milestone 2, part 4 done: list actions `name.remove(value)` (removes every match; if nothing matches it warns on stderr and keeps running) and `name.pop(index)` (removes the item at a position, counting from 0), with friendly errors and tests for every stage (472 tests). `examples/list_methods.scy` shows them.
 
+- Milestone 2, part 5 done: indexing. `a[1]`, `a[-1]` and `"hello"[1]` give one item or character (positions start at 0, negative counts from the end, any expression as the position), and `a[1] = 9` replaces a list item, with friendly errors for positions that do not exist, decimal or non-number positions, numbers and text assignment (556 tests). `examples/indexing.scy` shows it.
+
 - Milestone 3, part 1 done: `README.md` added for the public release (issue #16). It explains how to get Scripty and how to run `.scy` files. A guide to using the language is still to come.
 
 ## What's next?
@@ -57,4 +59,4 @@ Milestone 1 (v0.1) is complete. Milestone 2 is in progress:
 3. Loops (done, #13).
 4. The AI features (next).
 
-Ideas noticed along the way, not yet planned: looping over a number range, `break`, `and`/`or`, letting functions read global variables, getting one item of a list by position (`a[3]`), adding items to a list, `pop` giving back the removed item, lists inside lists, copying a list on `let b = a` (today both names share one list).
+Ideas noticed along the way, not yet planned: looping over a number range, `break`, `and`/`or`, letting functions read global variables, slices (`a[1:3]`), adding items to a list, `pop` giving back the removed item, lists inside lists, copying a list on `let b = a` (today both names share one list).

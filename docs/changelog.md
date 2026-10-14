@@ -4,6 +4,20 @@ All notable changes to Scripty are recorded here, newest first.
 
 ## [Unreleased]
 
+### Added (indexing)
+- `name[index]` gives one item of a list or one character of a text, like Python: `show a[1]`, `show a[-1]`, `show "hello"[1]`. Positions start at 0 and a negative position counts from the end (`a[-1]` is the last item). The position can be any expression (`a[i + 1]`, `a[len(a) - 1]`, `a[4 / 2]`). It is an expression, so it works anywhere a value does: `show`, `let`, calculations, conditions, function inputs, inside list literals, as the value of a `for`, and as the input of `remove` or `pop`. `words[0][1]` (a character of the first text item) works too.
+- `a[1] = 9` replaces one item of an existing list (a line on its own). The new value may be any number or text (items can be mixed). Text can't be changed this way (friendly error); only a plain name can be on the left (`a[0][1] = 9` is an error).
+- Friendly errors with the Scripty line: a position that is too big or too negative (`The list has 3 items (positions 0 to 2, or -1 to -3 from the end), so there is no item at position 3.`), an empty list or text, a decimal or text position (checked in the program when written, while running when worked out), indexing a number (`You can only use [ ] on a list or a text, but "n" is a number.`), assigning into text, an undeclared name, `a[]`, a missing `]`, and a line that is only `a[1]`.
+- New tree nodes `Index` and `AssignIndex`. The checker gives `a[i]` the kind text for a known text and unknown for a list (items may be mixed), so `a[1] + 1` has no false errors.
+- Generator: `a[1]` becomes `get_at(a, 1)` and `a[1] = 9` becomes `set_at(a, 1, 9)`; the runner provides both helpers (next to `remove_all` and `pop_at`), so out-of-range errors report the real numbers on the Scripty line. A variable named `get_at` or `set_at` gets the `_scy` suffix in the generated code.
+- `examples/indexing.scy` (also in the README commands) and 84 new tests in `tests/test_indexing.py` (556 in total).
+
+### Changed (indexing)
+- A line that starts with `name[` (such as `a[1]`) used to be `I don't understand a line that starts with "a"`. It is now either an assignment (`a[1] = 9`) or a friendlier error. The "I don't understand a line" error text also mentions list items now.
+- `a [1]` (with a space) means the same as `a[1]`.
+- `pop` is unchanged: `a.pop(-1)` is still an error, while `a[-1]` counts from the end.
+- All 472 existing tests pass unchanged.
+
 ### Added (list actions: remove and pop)
 - `name.remove(value)` removes EVERY item equal to `value` from the list (the value can be text, a number, a variable or any expression). If nothing matches, Scripty prints `Warning on line N: "Dog" is not in the list, so nothing was removed.` to **stderr** (so the program's normal output stays clean) and keeps running; the exit code stays 0. Text and numbers never match each other (`"1"` does not remove `1`), with no error.
 - `name.pop(index)` removes the item at that position. Positions start at 0, like `listName[3]` in the to-do. A position that is too big (`Error on line 3: The list has 3 items (positions 0 to 2), so there is no item at position 3.`), an empty list, a negative position, a decimal such as `1.5` and a non-number are friendly errors. A whole number that is the result of a division (`4 / 2` is `2.0`) is accepted.

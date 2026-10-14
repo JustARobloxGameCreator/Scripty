@@ -5,6 +5,8 @@ Grammar:
     program    = { statement }
     statement  = "let" NAME "=" expression NEWLINE
                | NAME "=" expression NEWLINE          (new value, no let)
+               | NAME "[" expression "]" "=" expression NEWLINE
+                                                      (change one list item)
                | "show" expression NEWLINE
                | "echo" "(" expression ")" NEWLINE
                | call NEWLINE                         (a call as a line)
@@ -20,8 +22,8 @@ Grammar:
     COMPARE    = "==" | "!=" | ">=" | "<=" | ">" | "<"
     expression = term { ("+" | "-") term }
     term       = factor { ("*" | "/") factor }
-    factor     = "-" factor | NUMBER | TEXT | call | NAME | list
-               | "(" expression ")"
+    factor     = "-" factor | primary { "[" expression "]" }
+    primary    = NUMBER | TEXT | call | NAME | list | "(" expression ")"
     list       = "[" [ expression { "," expression } ] "]"
     call       = NAME "(" [ expression { "," expression } ] ")"
     method     = ("remove" | "pop") "(" [ expression { "," expression } ] ")"
@@ -45,6 +47,12 @@ Design choices:
   like a call, but only the name before the dot and the two method names
   are accepted here. Whether `name` is really a list, and how many inputs
   the action needs, is the checker's job. A "." anywhere else is an error.
+- `[ ]` right after a value picks one item (`a[1]`, `"hello"[0]`, `F(1)[0]`,
+  `(a + b)[2]`, `a[0][1]`). It can follow any value, so the checker decides
+  whether it makes sense. Spaces change nothing: `a [1]` is `a[1]`. It binds
+  tighter than everything else, so `-a[0]` is `-(a[0])`. `a[]`, a missing
+  `]` and a line that is only `a[1]` are errors. `a[1] = 9` changes an item;
+  only a plain name can be on the left (`a[0][1] = 9` is an error).
 - A for loop goes through the characters of a text or the items of a
   list. It can be used at the
   top level, inside functions and inside if branches, and loops, ifs and
@@ -53,9 +61,9 @@ Design choices:
 Errors raise ScriptyError with a line number.
 """
 
-from ast_nodes import (LIST_METHODS, Assign, BinaryOp, Branch, Call, CallStatement,
-                       Compare, Echo, Expression, For, Function, Give, If, Let,
-                       ListLiteral, MethodCall, MethodStatement, Name, Negate,
+from ast_nodes import (LIST_METHODS, Assign, AssignIndex, BinaryOp, Branch, Call, CallStatement,
+                       Compare, Echo, Expression, For, Function, Give, If, Index,
+                       Let, ListLiteral, MethodCall, MethodStatement, Name, Negate,
                        Number, Program, Show, Statement, Text)
 from errors import ScriptyError
 from lexer import (COLON, COMMA, DEDENT, DOT, INDENT, KEYWORD, LBRACKET, LPAREN,
@@ -172,6 +180,8 @@ class _Parser:
             return CallStatement(self.parse_call(), token.line)
         if token.kind == NAME and self.peek_next().kind == DOT:
             return MethodStatement(self.parse_method_call(), token.line)
+        if token.kind == NAME and self.peek_next().kind == LBRACKET:
+            return self.parse_index_statement()
         if token.kind == DOT or self.peek_next().kind == DOT:
             raise _dot_error(token if token.kind == DOT else self.peek_next())
         if (token.kind == NAME and self.peek_next().kind == OPERATOR
@@ -182,7 +192,7 @@ class _Parser:
             f"{_describe(token)}. A line must start with let, show, echo, "
             "give, if, for, function, a function call like Name(1, 2), a "
             "list action like a.pop(1), or a new value for a variable like "
-            "x = 5.",
+            "x = 5 (or for a list item like a[0] = 5).",
             token.line,
         )
 
@@ -221,6 +231,27 @@ class _Parser:
                 name.line,
             )
         return Assign(name.value, self.parse_expression(), name.line)
+
+    def parse_index_statement(self) -> AssignIndex:
+        """Read `name[index] = value` (a line that starts with name[ )."""
+        start = self.peek()
+        target = self.parse_factor()
+        if not self.is_operator("="):
+            raise ScriptyError(
+                f"A line can't be only {start.value}[...]. To use the item, "
+                f"write: show {start.value}[0]  or  let x = {start.value}[0]. "
+                f"To change it, write: {start.value}[0] = 5", start.line)
+        if not isinstance(target, Index) or not isinstance(target.target, Name):
+            raise ScriptyError(
+                "Only one item of a list can be changed at a time, by the "
+                f"name of the list. Try: {start.value}[0] = 5", start.line)
+        self.advance()  # the "="
+        if self.peek().kind == NEWLINE:
+            raise ScriptyError(
+                f"{start.value}[...] has no new value. Write a value after "
+                f'the "=". Try: {start.value}[0] = 5', start.line)
+        return AssignIndex(target.target, target.index, self.parse_expression(),
+                           start.line)
 
     def parse_show(self) -> Show:
         keyword = self.advance()
@@ -542,6 +573,32 @@ class _Parser:
 
     def parse_factor(self) -> Expression:
         token = self.peek()
+        if self.is_operator("-"):
+            self.advance()
+            return Negate(self.parse_factor(), token.line)
+        value = self.parse_primary()
+        while self.peek().kind == LBRACKET:
+            value = self.parse_index(value)
+        return value
+
+    def parse_index(self, target: Expression) -> Index:
+        """Read `[position]` after a value."""
+        opening = self.advance()  # the "["
+        if self.peek().kind == RBRACKET:
+            raise ScriptyError(
+                'Put a position between the [ ], like: a[0]. The first '
+                "item is at position 0.", opening.line)
+        index = self.parse_expression()
+        if self.peek().kind != RBRACKET:
+            raise ScriptyError(
+                'This "[" has no matching "]". Did you forget to close it? '
+                f"I did not expect {_describe(self.peek())} here. "
+                "Try: a[0]", opening.line)
+        self.advance()
+        return Index(target, index, opening.line)
+
+    def parse_primary(self) -> Expression:
+        token = self.peek()
         if token.kind == NUMBER:
             self.advance()
             return Number(token.value, token.line)
@@ -555,9 +612,6 @@ class _Parser:
                 return self.parse_method_call()
             self.advance()
             return Name(token.value, token.line)
-        if self.is_operator("-"):
-            self.advance()
-            return Negate(self.parse_factor(), token.line)
         if token.kind == LPAREN:
             return self.parse_parentheses()
         if token.kind == LBRACKET:

@@ -10,9 +10,12 @@ The program runs with its own `print`, so `show` writes a list the Scripty
 way: [1, 2, 3] for numbers and ["a", "b"] for text (Python would write
 single quotes). Numbers and text are printed exactly as Python prints them.
 
-It also gets two helpers for the list actions `a.remove(value)` and
+It also gets helpers for the list actions `a.remove(value)` and
 `a.pop(index)`: `remove_all` (prints a warning to stderr and goes on when
 nothing matches) and `pop_at` (raises a friendly error for a bad position).
+`get_at(a, i)` and `set_at(a, i, value)` are what `a[i]` and `a[i] = value`
+become: they work like Python's, but give friendly errors (a position that is
+too big or too negative, a position that is not a whole number, ...).
 """
 
 import sys
@@ -43,7 +46,7 @@ def _scripty_print(*values: object) -> None:
 
 
 class ListActionError(Exception):
-    """A friendly problem with a list action (the message is shown as is)."""
+    """A friendly problem with a list or text action (shown as is)."""
 
 
 def _describe_kind(value: object) -> str:
@@ -98,12 +101,69 @@ def pop_at(items: object, index: object) -> None:
     del items[position]
 
 
+def _position(items: object, index: object) -> int:
+    """The position a[index] means, checked, as a whole number.
+
+    Negative positions count from the end, so -1 is the last item.
+    """
+    if isinstance(index, (str, list)):
+        raise ListActionError(
+            "A position must be a whole number, but this is "
+            f"{_describe_kind(index)}.")
+    if index != int(index):
+        raise ListActionError(
+            f"A position must be a whole number, but {index} has a decimal "
+            "part.")
+    position = int(index)
+    count = len(items)  # type: ignore[arg-type]
+    if -count <= position < count:
+        return position
+    what, unit = ("list", "item") if isinstance(items, list) else (
+        "text", "character")
+    if count == 0:
+        raise ListActionError(
+            f"The {what} is empty, so there is no {unit} at position "
+            f"{position}.")
+    places = ("only position 0, or -1 from the end" if count == 1 else
+              f"positions 0 to {count - 1}, or -1 to -{count} from the end")
+    raise ListActionError(
+        f"The {what} has {count} {unit}{'' if count == 1 else 's'} "
+        f"({places}), so there is no {unit} at position {position}.")
+
+
+def get_at(items: object, index: object) -> object:
+    """a[index]: one item of a list, or one character of a text."""
+    if not isinstance(items, (list, str)):
+        raise ListActionError(
+            "You can only use [ ] on a list or a text, but this value is "
+            f"{_describe_kind(items)}.")
+    return items[_position(items, index)]
+
+
+def set_at(items: object, index: object, value: object) -> None:
+    """a[index] = value: replace one item of a list."""
+    if isinstance(items, str):
+        raise ListActionError(
+            "Text can't be changed one character at a time. Give the whole "
+            "variable a new value instead.")
+    if not isinstance(items, list):
+        raise ListActionError(
+            "You can only use [ ] on a list or a text, but this value is "
+            f"{_describe_kind(items)}.")
+    if isinstance(value, list):
+        raise ListActionError(
+            "A list can't hold another list yet. Put only numbers or text "
+            "in the item.")
+    items[_position(items, index)] = value
+
+
 def run_python(source: str, line_map: dict[int, int]) -> None:
     """Run generated Python. Raises ScriptyError if the program fails."""
     code = compile(source, GENERATED_FILENAME, "exec")
     try:
         exec(code, {"__name__": "__scripty__", "print": _scripty_print,
-                   "remove_all": remove_all, "pop_at": pop_at})
+                   "remove_all": remove_all, "pop_at": pop_at,
+                   "get_at": get_at, "set_at": set_at})
     except Exception as error:
         line = _scripty_line(error, line_map)
         failed = _python_line_text(error, source)

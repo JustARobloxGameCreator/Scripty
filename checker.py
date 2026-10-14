@@ -85,12 +85,22 @@ one value; `pop` takes one whole, non-negative number (a decimal or a
 negative number written in the program is an error here, and one worked
 out while running is an error in the runner).
 
+Indexing: `a[1]` (a position counted from 0; negative counts from the end)
+works on a list or a text and can be used anywhere a value can. A known
+number is an error. The position must be a whole number: text, a list or a
+decimal written in the program is an error here; one worked out while
+running is checked by the runner (4 / 2 = 2.0 is fine). The answer is text
+for a text, and of unknown kind for a list (its items may be mixed), so
+`a[1] + 1` never gives a false error. `a[1] = 9` changes one item of an
+existing list: the name must be visible, text can't be changed, and the new
+value may be anything except a list (items can be mixed).
+
 The checker walks the tree top to bottom. It never changes the tree.
 """
 
-from ast_nodes import (LIST_METHODS, Assign, BinaryOp, Call, CallStatement,
-                       Compare, Echo, Expression, For, Function, Give, If, Let,
-                       ListLiteral, MethodCall, MethodStatement, Name, Negate,
+from ast_nodes import (LIST_METHODS, Assign, AssignIndex, BinaryOp, Call, CallStatement,
+                       Compare, Echo, Expression, For, Function, Give, If, Index,
+                       Let, ListLiteral, MethodCall, MethodStatement, Name, Negate,
                        Number, Program, Show, Text)
 from errors import ScriptyError
 
@@ -183,6 +193,8 @@ class _Checker:
             self.declare(scope, statement.name, statement.line, kind)
         elif isinstance(statement, Assign):
             self.check_assign(statement, scope)
+        elif isinstance(statement, AssignIndex):
+            self.check_assign_index(statement, scope)
         elif isinstance(statement, (Show, Echo, Give)):
             self.check_expression(statement.value, scope)
         elif isinstance(statement, CallStatement):
@@ -213,6 +225,50 @@ class _Checker:
                 f"{old_line}), so it can't be changed to "
                 f"{_with_article(kind)}. A variable keeps the same kind of "
                 "value: use a new name with let instead.", statement.line)
+
+    def check_assign_index(self, statement: AssignIndex,
+                           scope: _Scope) -> None:
+        """a[1] = value: change one item of an existing list."""
+        target = statement.target
+        kind = self.check_name(target, scope)
+        if kind == NUMBER_KIND:
+            raise ScriptyError(_index_number_message(target),
+                               statement.line)
+        if kind == TEXT_KIND:
+            raise ScriptyError(
+                "Text can't be changed one character at a time, so "
+                f"{target.name}[...] = ... is not allowed. Give the whole "
+                f'variable a new value instead, like: {target.name} = "new text"',
+                statement.line)
+        self.check_position(statement.index, scope,
+                            f"{target.name}[1] = 9", statement.line)
+        if self.check_expression(statement.value, scope) == LIST_KIND:
+            raise ScriptyError(
+                "A list can't hold another list yet. Put only numbers "
+                "or text in the item.", statement.line)
+
+    def check_position(self, index: Expression, scope: _Scope, example: str,
+                       line: int) -> None:
+        """The position inside [ ] must be a whole number (when known)."""
+        kind = self.check_expression(index, scope)
+        if kind in (TEXT_KIND, LIST_KIND):
+            raise ScriptyError(
+                "A position must be a whole number, but this is "
+                f"{_with_article(kind)}. Try: {example}", line)
+        decimal = _decimal_literal(index)
+        if decimal is not None:
+            raise ScriptyError(
+                f"A position must be a whole number, but {decimal} has a "
+                f"decimal part. Try: {example}", line)
+
+    def check_index(self, expression: Index, scope: _Scope) -> str:
+        """a[1]: one item of a list, or one character of a text."""
+        kind = self.check_expression(expression.target, scope)
+        if kind == NUMBER_KIND:
+            raise ScriptyError(_index_number_message(expression.target),
+                               expression.line)
+        self.check_position(expression.index, scope, "a[1]", expression.line)
+        return TEXT_KIND if kind == TEXT_KIND else UNKNOWN_KIND
 
     def check_if(self, node: If, scope: _Scope) -> None:
         for branch in node.branches:
@@ -293,6 +349,8 @@ class _Checker:
             return NUMBER_KIND
         if isinstance(expression, ListLiteral):
             return self.check_list(expression, scope)
+        if isinstance(expression, Index):
+            return self.check_index(expression, scope)
         if isinstance(expression, Call):
             return self.check_call(expression, scope, as_value=True)
         if isinstance(expression, MethodCall):
@@ -447,6 +505,21 @@ def _check_position(argument: Expression, kind: str, example: str,
             f"Positions start at 0 and can't be negative, so "
             f"-{argument.operand.value} is not a position. Try: {example}",
             line)
+
+
+def _decimal_literal(expression: Expression) -> float | None:
+    """The value of a decimal written in the program (1.5, -1.5), else None."""
+    if isinstance(expression, Negate):
+        value = _decimal_literal(expression.operand)
+        return None if value is None else -value
+    if isinstance(expression, Number) and expression.value != int(expression.value):
+        return expression.value
+    return None
+
+
+def _index_number_message(target: Expression) -> str:
+    return ("You can only use [ ] on a list or a text, but "
+            f"{_describe_number(target)} is a number.")
 
 
 def _describe_number(expression: Expression) -> str:

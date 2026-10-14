@@ -1,0 +1,29 @@
+// Indexing: write the name, then the position in [ ]. The first item is 0
+let numbers = [10, 20, 30]
+show numbers[0] // output: 10
+show numbers[2] // output: 30
+
+// a negative position counts from the end: -1 is the last item
+show numbers[-1] // output: 30
+
+// the position can be any calculation
+let i = 1
+show numbers[i + 1] // output: 30
+show numbers[len(numbers) - 1] // output: 30
+
+// it works on text too, and gives one character
+let word = "hello"
+show word[1] // output: e
+show "hello"[-1] // output: o
+
+// use an item anywhere a value fits
+show numbers[0] + numbers[2] // output: 40
+if (numbers[1] > 15):
+    show "the second item is big"
+
+// change one item of a list (text cannot be changed this way)
+numbers[1] = 99
+show numbers // output: [10, 99, 30]
+
+// a position that does not exist is a friendly error:
+// show numbers[3]

@@ -1,8 +1,8 @@
 """AST nodes: the tree the parser builds and later stages walk.
 
 Statements: Let, Assign, Show, Echo, CallStatement, MethodStatement, Give,
-If, For, Function.
-Expressions: Number, Text, Name, BinaryOp, Negate, Call, ListLiteral,
+If, For, Function, AssignIndex.
+Expressions: Number, Text, Name, BinaryOp, Negate, Call, ListLiteral, Index,
 MethodCall (only so the checker can explain it is not a value).  A
 Compare (such as x > 5) is a condition: it only appears in an if or elif
 line.  Every node remembers the `line` it came from, so the checker and
@@ -87,11 +87,24 @@ class MethodCall:
     line: int
 
 
+@dataclass
+class Index:
+    """One item of a list, or one character of a text: a[1], "hello"[0].
+
+    `target` is any expression and `index` is the position (counting from 0;
+    negative positions count from the end).
+    """
+
+    target: "Expression"
+    index: "Expression"
+    line: int
+
+
 # The actions that can be written after a dot.
 LIST_METHODS = ("remove", "pop")
 
 Expression = (Number | Text | Name | BinaryOp | Negate | Call | ListLiteral
-              | MethodCall)
+              | Index | MethodCall)
 
 
 @dataclass
@@ -106,6 +119,16 @@ class Assign:
     """name = value: give an existing variable a new value (no `let`)."""
 
     name: str
+    value: Expression
+    line: int
+
+
+@dataclass
+class AssignIndex:
+    """name[index] = value: replace one item of an existing list."""
+
+    target: Name
+    index: Expression
     value: Expression
     line: int
 
@@ -183,7 +206,7 @@ class Function:
     line: int
 
 
-Statement = (Let | Assign | Show | Echo | CallStatement | MethodStatement
+Statement = (Let | Assign | AssignIndex | Show | Echo | CallStatement | MethodStatement
              | Give | If | For | Function)
 
 

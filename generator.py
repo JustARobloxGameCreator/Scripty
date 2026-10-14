@@ -20,6 +20,8 @@ becomes exactly one Python line:
     sort(a)            ->   a.sort()    (sorts the list itself)
     a.remove("Dog")    ->   remove_all(a, 'Dog', 3)   (3 = the Scripty line)
     a.pop(2)           ->   pop_at(a, 2)
+    a[1]               ->   get_at(a, 1)
+    a[1] = 9           ->   set_at(a, 1, 9)
 
 Blocks are indented with 4 spaces, like in Scripty.
 
@@ -35,6 +37,8 @@ Design choices:
 - `remove_all` and `pop_at` are small helpers that the runner gives to the
   program (see runner.py). `remove_all` needs the Scripty line number to
   write its warning, so the generator passes it as the last input.
+- `get_at` and `set_at` are helpers too: they check the position and give
+  the friendly "no item at position 3" errors (see runner.py).
 - A Scripty variable, function or input name that would clash with Python
   (a Python keyword such as `class`, or `print`) gets `_scy` added to its
   name in the generated code.
@@ -46,13 +50,13 @@ report runtime errors on the right Scripty line.
 
 import keyword
 
-from ast_nodes import (Assign, BinaryOp, Call, CallStatement, Compare, Echo,
-                       Expression, For, Function, Give, If, Let, ListLiteral,
-                       MethodStatement, Name, Negate, Number, Program, Show,
+from ast_nodes import (Assign, AssignIndex, BinaryOp, Call, CallStatement, Compare, Echo,
+                       Expression, For, Function, Give, If, Index, Let,
+                       ListLiteral, MethodStatement, Name, Negate, Number, Program, Show,
                        Statement, Text)
 
 # Names that cannot be used as-is in the generated Python.
-_RESERVED = {"print", "remove_all", "pop_at"}
+_RESERVED = {"print", "remove_all", "pop_at", "get_at", "set_at"}
 
 
 def generate(program: Program) -> tuple[str, dict[int, int]]:
@@ -121,6 +125,10 @@ def _statement(statement: Statement) -> str:
         return f"{python_name(statement.name)} = {_expression(statement.value)}"
     if isinstance(statement, Assign):
         return f"{python_name(statement.name)} = {_expression(statement.value)}"
+    if isinstance(statement, AssignIndex):
+        return (f"set_at({python_name(statement.target.name)}, "
+                f"{_expression(statement.index)}, "
+                f"{_expression(statement.value)})")
     if isinstance(statement, (Show, Echo)):
         return f"print({_expression(statement.value)})"
     if isinstance(statement, Give):
@@ -153,6 +161,9 @@ def _expression(expression: Expression, nested: bool = False) -> str:
     if isinstance(expression, Call):
         args = ", ".join(_expression(arg) for arg in expression.args)
         return f"{python_name(expression.name)}({args})"
+    if isinstance(expression, Index):
+        return (f"get_at({_expression(expression.target)}, "
+                f"{_expression(expression.index)})")
     if isinstance(expression, Negate):
         return "-" + _expression(expression.operand, nested=True)
     if isinstance(expression, BinaryOp):

@@ -297,9 +297,9 @@ class GeneratorTests(unittest.TestCase):
         self.assertEqual(python, "a = [] + [1]\n")
 
     def test_python_keyword_name_in_assignment(self):
-        python, _ = self.gen("let class = [1]\nclass = [2]\nsort(class)")
+        python, _ = self.gen("let def = [1]\ndef = [2]\nsort(def)")
         self.assertEqual(
-            python, "class_scy = [1]\nclass_scy = [2]\nclass_scy.sort()\n")
+            python, "def_scy = [1]\ndef_scy = [2]\ndef_scy.sort()\n")
 
     def test_todo_program_line_map(self):
         _, line_map = self.gen(TODO_PROGRAM)

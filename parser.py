@@ -10,9 +10,13 @@ Grammar:
                | "show" expression NEWLINE
                | "echo" "(" expression ")" NEWLINE
                | call NEWLINE                         (a call as a line)
-               | NAME "." method NEWLINE              (a list action)
+               | member NEWLINE                       (an action as a line)
+               | member "=" expression NEWLINE        (change what an object
+                                                       remembers: d.name = 1)
                | "give" expression NEWLINE            (only inside a function)
                | "function" NAME "(" [ NAME { "," NAME } ] ")" block
+               | "class" NAME [ "(" NAME ")" ] ":" NEWLINE INDENT
+                 { function } DEDENT                  (only functions inside)
                | "if" condition block { "elif" condition block }
                  [ "else" block ]
                | "for" NAME "in" expression block     (per character / item)
@@ -23,10 +27,13 @@ Grammar:
     expression = term { ("+" | "-") term }
     term       = factor { ("*" | "/") factor }
     factor     = "-" factor | primary { "[" expression "]" }
-    primary    = NUMBER | TEXT | call | NAME | list | "(" expression ")"
+    primary    = NUMBER | TEXT | call | member | NAME | list
+               | "(" expression ")"
     list       = "[" [ expression { "," expression } ] "]"
     call       = NAME "(" [ expression { "," expression } ] ")"
-    method     = ("remove" | "pop") "(" [ expression { "," expression } ] ")"
+    member     = NAME { "." NAME } [ "." NAME "(" [ expression
+                 { "," expression } ] ")" ]
+                 (d.name, self.pet.name, a.pop(1), d.speak(), super.init(1))
 
 Design choices:
 
@@ -43,10 +50,18 @@ Design choices:
 - `name = value` (no `let`) is a statement of its own: it gives an
   existing variable a new value. Whether the name exists is the checker's
   job.
-- A list action is `name.remove(value)` or `name.pop(index)`. It is parsed
-  like a call, but only the name before the dot and the two method names
-  are accepted here. Whether `name` is really a list, and how many inputs
-  the action needs, is the checker's job. A "." anywhere else is an error.
+- A dot comes after a name: `a.pop(1)`, `d.speak()`, `d.name`, and chains
+  of things such as `self.pet.name` or `self.pet.speak()`. The parser only
+  checks the shape. Whether `a` is a list or an object, which actions exist
+  and how many inputs they need is the checker's job (the list actions are
+  `remove` and `pop`). The word after a dot may be any name, even a keyword
+  such as `class`. A call ends the chain: `d.speak().x` is an error (put the
+  answer in a variable first). A "." after a number, a text or ")" is an
+  error.
+- A class is `class Dog:` or `class Puppy(Dog):` (one parent) with an
+  indented body that holds only `function` lines (the actions). It can only
+  be written at the top level, like a function. `d.name = value` is a line of
+  its own and changes (or creates) a thing the object remembers.
 - `[ ]` right after a value picks one item (`a[1]`, `"hello"[0]`, `F(1)[0]`,
   `(a + b)[2]`, `a[0][1]`). It can follow any value, so the checker decides
   whether it makes sense. Spaces change nothing: `a [1]` is `a[1]`. It binds
@@ -61,9 +76,10 @@ Design choices:
 Errors raise ScriptyError with a line number.
 """
 
-from ast_nodes import (LIST_METHODS, Assign, AssignIndex, BinaryOp, Branch, Call, CallStatement,
-                       Compare, Echo, Expression, For, Function, Give, If, Index,
-                       Let, ListLiteral, MethodCall, MethodStatement, Name, Negate,
+from ast_nodes import (LIST_METHODS, Assign, AssignAttribute, AssignIndex, Attribute,
+                       BinaryOp, Branch, Call, CallStatement, ClassDef, Compare,
+                       Echo, Expression, For, Function, Give, If, Index, Let,
+                       ListLiteral, MethodCall, MethodStatement, Name, Negate,
                        Number, Program, Show, Statement, Text)
 from errors import ScriptyError
 from lexer import (COLON, COMMA, DEDENT, DOT, INDENT, KEYWORD, LBRACKET, LPAREN,
@@ -88,11 +104,19 @@ def _describe(token: Token) -> str:
 
 
 def _dot_error(token: Token) -> ScriptyError:
-    """A "." that is not part of a number or a list action."""
+    """A "." that is not part of a number, a list action or an object."""
     return ScriptyError(
         'A "." only works right after the name of a list, like: '
-        'a.remove("Dog") or a.pop(1). For a decimal number write the '
-        "digit before the dot too, like 0.5.", token.line)
+        'a.remove("Dog") or a.pop(1), or of an object, like: d.speak() or '
+        "d.name. For a decimal number write the digit before the dot too, "
+        "like 0.5.", token.line)
+
+
+def _needs_parentheses(name: str, method: str, line: int) -> ScriptyError:
+    example = '"Dog"' if method == "remove" else "1"
+    return ScriptyError(
+        f"{method} needs parentheses with a value inside. "
+        f"Try: {name}.{method}({example})", line)
 
 
 class _Parser:
@@ -141,8 +165,8 @@ class _Parser:
         if token.kind == INDENT:
             raise ScriptyError(
                 "This line is indented, but the line above does not end "
-                'with a ":". Only the lines inside a function, an if or a for '
-                "are indented. Remove the spaces at the start.",
+                'with a ":". Only the lines inside a function, an if, a for '
+                "or a class are indented. Remove the spaces at the start.",
                 token.line,
             )
         if token.kind == KEYWORD:
@@ -152,6 +176,8 @@ class _Parser:
                 return self.parse_if()
             if token.value == "for":
                 return self.parse_for()
+            if token.value == "class":
+                return self.parse_class()
             if token.value == "in":
                 raise ScriptyError(
                     'in only works in a for line. Try: for letter in "hi":',
@@ -179,7 +205,7 @@ class _Parser:
         if token.kind == NAME and self.peek_next().kind == LPAREN:
             return CallStatement(self.parse_call(), token.line)
         if token.kind == NAME and self.peek_next().kind == DOT:
-            return MethodStatement(self.parse_method_call(), token.line)
+            return self.parse_member_statement()
         if token.kind == NAME and self.peek_next().kind == LBRACKET:
             return self.parse_index_statement()
         if token.kind == DOT or self.peek_next().kind == DOT:
@@ -196,9 +222,40 @@ class _Parser:
             token.line,
         )
 
+    def parse_member_statement(self) -> Statement:
+        """Read a line that starts with `name.`: an action or d.name = value."""
+        start = self.peek()
+        member = self.parse_member()
+        if self.is_operator("="):
+            if not isinstance(member, Attribute):
+                raise ScriptyError(
+                    "You can't give a new value to an action call. To "
+                    "change what an object remembers write: "
+                    f"{start.value}.name = 5", start.line)
+            self.advance()  # the "="
+            if self.peek().kind == NEWLINE:
+                raise ScriptyError(
+                    f"{start.value}.{member.name} has no new value. Write "
+                    f'a value after the "=". Try: '
+                    f"{start.value}.{member.name} = 5", start.line)
+            return AssignAttribute(member.target, member.name,
+                                   self.parse_expression(), start.line)
+        if isinstance(member, MethodCall):
+            return MethodStatement(member, start.line)
+        if member.name in LIST_METHODS:
+            raise _needs_parentheses(start.value, member.name, start.line)
+        raise ScriptyError(
+            f"A line can't be only {start.value}.{member.name}. To use it, "
+            f"write: show {start.value}.{member.name}  To change it, "
+            f"write: {start.value}.{member.name} = 5", start.line)
+
     def parse_let(self) -> Let:
         keyword = self.advance()
         name = self.peek()
+        if name.kind == KEYWORD and name.value == "class":
+            raise ScriptyError(
+                '"class" is a Scripty keyword (it starts a class), so it '
+                "can't be a variable name. Pick another name.", keyword.line)
         if name.kind != NAME:
             raise ScriptyError(
                 "You wrote let but forgot the name of the variable. "
@@ -323,9 +380,11 @@ class _Parser:
 
     # -- functions, if, blocks ---------------------------------------------
 
-    def parse_function(self) -> Function:
+    def parse_function(self, in_class: bool = False) -> Function:
         keyword = self.advance()
-        if self.depth > 0:
+        # A function is written outside everything, or (an action) directly
+        # inside a class, which is one block deep.
+        if self.depth > (1 if in_class else 0):
             raise ScriptyError(
                 "A function can't be written inside another function, "
                 "an if or a for. Put it at the start of a line, outside everything.",
@@ -360,6 +419,76 @@ class _Parser:
             f"function {name.value}({', '.join(params)}):",
             is_function=True)
         return Function(name.value, params, body, keyword.line)
+
+    def parse_class(self) -> ClassDef:
+        keyword = self.advance()
+        if self.depth > 0:
+            raise ScriptyError(
+                "A class can't be written inside a function, a class, an "
+                "if or a for. Put it at the start of a line, outside "
+                "everything.", keyword.line)
+        name = self.peek()
+        if name.kind == KEYWORD:
+            raise ScriptyError(
+                f'"{name.value}" is a Scripty keyword, so it can\'t be a '
+                "class name. Pick another name.", keyword.line)
+        if name.kind != NAME:
+            raise ScriptyError(
+                "You wrote class but forgot its name. Try: class Dog:",
+                keyword.line)
+        self.advance()
+        parent = None
+        if self.peek().kind == LPAREN:
+            parent = self.parse_parent(keyword.line, name.value)
+        example = f"class {name.value}:"
+        self.start_block(keyword.line, f"class {name.value}", example)
+        self.depth += 1
+        methods: list[Function] = []
+        while self.pos < len(self.tokens) and self.peek().kind != DEDENT:
+            methods.append(self.parse_class_member(name.value))
+        self.depth -= 1
+        self.advance()  # the DEDENT
+        return ClassDef(name.value, parent, methods, keyword.line)
+
+    def parse_parent(self, line: int, class_name: str) -> str:
+        """Read `(Parent)` after a class name."""
+        self.advance()  # the "("
+        parent = self.peek()
+        example = f"class {class_name}(Dog):"
+        if parent.kind != NAME:
+            raise ScriptyError(
+                f"class {class_name}( needs the name of the parent class "
+                f"after the bracket. Try: {example}", line)
+        self.advance()
+        if self.peek().kind == COMMA:
+            raise ScriptyError(
+                f"A class can have only one parent, but {class_name} lists "
+                f"more. Try: {example}", line)
+        if self.peek().kind != RPAREN:
+            raise ScriptyError(
+                f"The parent of {class_name} is missing its closing "
+                f'")". Try: {example}', line)
+        self.advance()
+        return parent.value
+
+    def parse_class_member(self, class_name: str) -> Function:
+        """One line directly inside a class: it must be a function."""
+        token = self.peek()
+        if token.kind == KEYWORD and token.value == "function":
+            return self.parse_function(in_class=True)
+        if token.kind == KEYWORD and token.value == "class":
+            raise ScriptyError(
+                "A class can't be written inside another class. Put it at "
+                "the start of a line, outside everything.", token.line)
+        if token.kind == INDENT:
+            raise ScriptyError(
+                "This line is indented too far. The lines inside a class "
+                "are functions, indented by 4 spaces.", token.line)
+        raise ScriptyError(
+            f"A class can only hold functions (its actions), but I found "
+            f"{_describe(token)} inside {class_name}. To give an object "
+            "something to remember, set it inside a function with: "
+            "self.name = ...", token.line)
 
     def parse_parameters(self, line: int, function_name: str) -> list[str]:
         params: list[str] = []
@@ -446,9 +575,8 @@ class _Parser:
         body = self.parse_block(keyword.line, word, f"{word} (x > 5):")
         return Branch(condition, body, keyword.line)
 
-    def parse_block(self, line: int, description: str, example: str,
-                    is_function: bool = False) -> list[Statement]:
-        """Read `: NEWLINE INDENT statements DEDENT`."""
+    def start_block(self, line: int, description: str, example: str) -> None:
+        """Read the start of a block: `: NEWLINE INDENT`."""
         token = self.peek()
         if token.kind != COLON:
             if token.kind == NEWLINE:
@@ -478,6 +606,11 @@ class _Parser:
                 line,
             )
         self.advance()
+
+    def parse_block(self, line: int, description: str, example: str,
+                    is_function: bool = False) -> list[Statement]:
+        """Read `: NEWLINE INDENT statements DEDENT`."""
+        self.start_block(line, description, example)
         was_in_function = self.in_function
         if is_function:
             self.in_function = True
@@ -609,7 +742,7 @@ class _Parser:
             if self.peek_next().kind == LPAREN:
                 return self.parse_call()
             if self.peek_next().kind == DOT:
-                return self.parse_method_call()
+                return self.parse_member()
             self.advance()
             return Name(token.value, token.line)
         if token.kind == LPAREN:
@@ -626,33 +759,31 @@ class _Parser:
         args = self.parse_arguments(name.value, name.line)
         return Call(name.value, args, name.line)
 
-    def parse_method_call(self) -> MethodCall:
-        """Read `name.remove(value)` or `name.pop(index)`."""
-        target = self.advance()
-        self.advance()  # the "."
-        method = self.peek()
-        if method.kind != NAME:
-            raise ScriptyError(
-                'A "." must be followed by what to do with the list. '
-                'Try: a.remove("Dog") or a.pop(1)', target.line)
-        self.advance()
-        if method.value not in LIST_METHODS:
-            raise ScriptyError(
-                f"I don't know what \"{method.value}\" does to a list. "
-                f"The list actions are: {', '.join(LIST_METHODS)}. "
-                f'Try: {target.value}.remove("Dog") or {target.value}.pop(1)',
-                target.line)
-        if self.peek().kind != LPAREN:
-            example = ('"Dog"' if method.value == "remove" else "1")
-            raise ScriptyError(
-                f"{method.value} needs parentheses with a value inside. "
-                f"Try: {target.value}.{method.value}({example})",
-                target.line)
-        self.advance()  # the "("
-        args = self.parse_arguments(f"{target.value}.{method.value}",
-                                    target.line)
-        return MethodCall(Name(target.value, target.line), method.value,
-                          args, target.line)
+    def parse_member(self) -> Expression:
+        """Read what follows a name and a dot.
+
+        `d.name` and `self.pet.name` are attributes; `a.pop(1)`,
+        `d.speak()` and `self.pet.speak()` are action calls. A call ends
+        the chain.
+        """
+        first = self.advance()
+        value: Expression = Name(first.value, first.line)
+        path = first.value
+        while self.peek().kind == DOT:
+            dot = self.advance()
+            member = self.peek()
+            if member.kind not in (NAME, KEYWORD):
+                raise ScriptyError(
+                    'A "." must be followed by a name, like: '
+                    'a.remove("Dog"), d.speak() or d.name', dot.line)
+            self.advance()
+            path += "." + member.value
+            if self.peek().kind == LPAREN:
+                self.advance()  # the "("
+                args = self.parse_arguments(path, first.line)
+                return MethodCall(value, member.value, args, first.line)
+            value = Attribute(value, member.value, first.line)
+        return value
 
     def parse_arguments(self, name: str, line: int) -> list[Expression]:
         """Read the inputs of a call, after its "(", up to the ")"."""

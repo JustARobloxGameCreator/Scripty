@@ -79,8 +79,8 @@ class ExpressionTests(unittest.TestCase):
 
 class NameTests(unittest.TestCase):
     def test_python_keyword_is_renamed(self):
-        source, _ = gen("let class = 1\nshow class")
-        self.assertEqual(source, "class_scy = 1\nprint(class_scy)\n")
+        source, _ = gen("let def = 1\nshow def")
+        self.assertEqual(source, "def_scy = 1\nprint(def_scy)\n")
 
     def test_print_variable_does_not_break_print(self):
         source, _ = gen("let print = 1\nshow print")
@@ -146,13 +146,13 @@ class ForLoopGenerationTests(unittest.TestCase):
         self.assertEqual(run_source(source), "yes\nno\n")
 
     def test_keyword_and_builtin_names_get_suffix(self):
-        source, _ = gen('for class in "ab":\n    show class\n'
+        source, _ = gen('for def in "ab":\n    show def\n'
                         'for print in "c":\n    show print')
-        self.assertIn("for class_scy in 'ab':", source)
-        self.assertIn("print(class_scy)", source)
+        self.assertIn("for def_scy in 'ab':", source)
+        self.assertIn("print(def_scy)", source)
         self.assertIn("for print_scy in 'c':", source)
         self.assertEqual(run_source(
-            'for class in "ab":\n    show class'), "a\nb\n")
+            'for def in "ab":\n    show def'), "a\nb\n")
 
     def test_empty_text_runs_zero_times(self):
         self.assertEqual(run_source('for c in "":\n    show c\nshow 1'),
@@ -227,10 +227,10 @@ class FunctionAndIfGenerationTests(unittest.TestCase):
 
     def test_python_keyword_names_get_suffix(self):
         source, _ = gen(
-            "function class(lambda):\n    give lambda\nshow class(1)")
+            "function def(lambda):\n    give lambda\nshow def(1)")
         self.assertEqual(source, (
-            "def class_scy(lambda_scy):\n    return lambda_scy\n"
-            "print(class_scy(1))\n"))
+            "def def_scy(lambda_scy):\n    return lambda_scy\n"
+            "print(def_scy(1))\n"))
 
     def test_function_named_print(self):
         source, _ = gen("function print(a):\n    give a\nshow print(2)")

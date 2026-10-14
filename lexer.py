@@ -1,13 +1,15 @@
 """Lexer: turns Scripty source text into a list of tokens.
 
 Rules:
-- Keywords: let, show, echo, function, if, elif, else, give, for, in.
+- Keywords: let, show, echo, function, if, elif, else, give, for, in, class.
+  (self and super are ordinary names to the lexer; the checker guards them.)
 - Names: letters, digits and underscores, not starting with a digit.
 - Numbers: 5 or 3.14 (the value is an int or a float).
 - Text: written in double quotes on a single line, e.g. "Hello".
 - Operators: + - * / =  and the comparisons == != >= <= > <
-- Punctuation: ( ) [ ] , : and . (a dot only appears in a list action such
-  as a.remove("Dog"); a number like 1.5 is still one number token)
+- Punctuation: ( ) [ ] , : and . (a dot only appears after the name of a
+  list or an object, as in a.remove("Dog") or d.name; a number like 1.5 is
+  still one number token)
 - Comments: from // or # to the end of the line are ignored. A // or #
   inside quoted text is just text. (Scripty has no integer division, so
   // is free to be a comment.)
@@ -29,7 +31,7 @@ from typing import NamedTuple
 from errors import ScriptyError
 
 KEYWORDS = {"let", "show", "echo", "function", "if", "elif", "else", "give",
-            "for", "in"}
+            "for", "in", "class"}
 INDENT_SIZE = 4
 
 # Token kinds

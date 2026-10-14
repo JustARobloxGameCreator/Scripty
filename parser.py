@@ -4,6 +4,7 @@ Grammar:
 
     program    = { statement }
     statement  = "let" NAME "=" expression NEWLINE
+               | NAME "=" expression NEWLINE          (new value, no let)
                | "show" expression NEWLINE
                | "echo" "(" expression ")" NEWLINE
                | call NEWLINE                         (a call as a line)
@@ -11,14 +12,16 @@ Grammar:
                | "function" NAME "(" [ NAME { "," NAME } ] ")" block
                | "if" condition block { "elif" condition block }
                  [ "else" block ]
-               | "for" NAME "in" expression block     (once per character)
+               | "for" NAME "in" expression block     (per character / item)
     block      = ":" NEWLINE INDENT { statement } DEDENT
     condition  = expression COMPARE expression
                | "(" condition ")"                    (parentheses optional)
     COMPARE    = "==" | "!=" | ">=" | "<=" | ">" | "<"
     expression = term { ("+" | "-") term }
     term       = factor { ("*" | "/") factor }
-    factor     = "-" factor | NUMBER | TEXT | call | NAME | "(" expression ")"
+    factor     = "-" factor | NUMBER | TEXT | call | NAME | list
+               | "(" expression ")"
+    list       = "[" [ expression { "," expression } ] "]"
     call       = NAME "(" [ expression { "," expression } ] ")"
 
 Design choices:
@@ -31,19 +34,26 @@ Design choices:
   values: they only appear after `if` and `elif`. No `and`/`or` yet.
 - Functions can only be defined at the top level (not inside another
   function, an if or a for), and `give` only works inside a function.
-- A for loop goes through the characters of a text. It can be used at the
+- A list is written `[1, 2, 3]` (or `[]`). A trailing comma (`[1, 2,]`) is
+  an error. Lists inside lists are rejected later, by the checker.
+- `name = value` (no `let`) is a statement of its own: it gives an
+  existing variable a new value. Whether the name exists is the checker's
+  job.
+- A for loop goes through the characters of a text or the items of a
+  list. It can be used at the
   top level, inside functions and inside if branches, and loops, ifs and
   `give` can be nested inside it.
 
 Errors raise ScriptyError with a line number.
 """
 
-from ast_nodes import (BinaryOp, Branch, Call, CallStatement, Compare, Echo,
-                       Expression, For, Function, Give, If, Let, Name, Negate,
-                       Number, Program, Show, Statement, Text)
+from ast_nodes import (Assign, BinaryOp, Branch, Call, CallStatement, Compare, Echo,
+                       Expression, For, Function, Give, If, Let,
+                       ListLiteral, Name, Negate, Number, Program, Show, Statement, Text)
 from errors import ScriptyError
-from lexer import (COLON, COMMA, DEDENT, INDENT, KEYWORD, LPAREN, NAME,
-                   NEWLINE, NUMBER, OPERATOR, RPAREN, TEXT, Token)
+from lexer import (COLON, COMMA, DEDENT, INDENT, KEYWORD, LBRACKET, LPAREN,
+                   NAME, NEWLINE, NUMBER, OPERATOR, RBRACKET, RPAREN, TEXT,
+                   Token)
 
 COMPARISONS = ("==", "!=", ">=", "<=", ">", "<")
 
@@ -145,13 +155,14 @@ class _Parser:
             return self.parse_give()
         if token.kind == NAME and self.peek_next().kind == LPAREN:
             return CallStatement(self.parse_call(), token.line)
-        hint = ""
-        if token.kind == NAME and self.peek_next().kind == OPERATOR                 and self.peek_next().value == "=":
-            hint = f" To create a variable write: let {token.value} = ..."
+        if (token.kind == NAME and self.peek_next().kind == OPERATOR
+                and self.peek_next().value == "="):
+            return self.parse_assign()
         raise ScriptyError(
             f"I don't understand a line that starts with "
             f"{_describe(token)}. A line must start with let, show, echo, "
-            "give, if, for, function, or a function call like Name(1, 2)." + hint,
+            "give, if, for, function, a function call like Name(1, 2), or a "
+            "new value for a variable like x = 5.",
             token.line,
         )
 
@@ -179,6 +190,17 @@ class _Parser:
                 keyword.line,
             )
         return Let(name.value, self.parse_expression(), keyword.line)
+
+    def parse_assign(self) -> Assign:
+        name = self.advance()
+        self.advance()  # the "="
+        if self.peek().kind == NEWLINE:
+            raise ScriptyError(
+                f'"{name.value}" has no new value. Write a value after the '
+                f'"=". Try: {name.value} = 5',
+                name.line,
+            )
+        return Assign(name.value, self.parse_expression(), name.line)
 
     def parse_show(self) -> Show:
         keyword = self.advance()
@@ -337,7 +359,7 @@ class _Parser:
         self.advance()
         if self.peek().kind in (COLON, NEWLINE):
             raise ScriptyError(
-                f"for {name.value} in needs a text to go through. "
+                f"for {name.value} in needs a text or a list to go through. "
                 f'Try: for {name.value} in "hello":',
                 keyword.line,
             )
@@ -514,6 +536,8 @@ class _Parser:
             return Negate(self.parse_factor(), token.line)
         if token.kind == LPAREN:
             return self.parse_parentheses()
+        if token.kind == LBRACKET:
+            return self.parse_list()
         raise self.missing_value_error(token)
 
     def parse_call(self) -> Call:
@@ -537,6 +561,34 @@ class _Parser:
                     "(or a comma between inputs). "
                     f"I did not expect {_describe(token)} here.",
                     name.line,
+                )
+
+    def parse_list(self) -> ListLiteral:
+        opening = self.advance()  # the "["
+        items: list[Expression] = []
+        if self.peek().kind == RBRACKET:
+            self.advance()
+            return ListLiteral(items, opening.line)
+        while True:
+            if self.peek().kind == RBRACKET:
+                raise ScriptyError(
+                    'There is a comma right before the closing "]". '
+                    "Remove the last comma, like: [1, 2, 3]",
+                    opening.line,
+                )
+            items.append(self.parse_expression())
+            token = self.peek()
+            if token.kind == COMMA:
+                self.advance()
+            elif token.kind == RBRACKET:
+                self.advance()
+                return ListLiteral(items, opening.line)
+            else:
+                raise ScriptyError(
+                    'This list is missing its closing "]" (or a comma '
+                    f"between items). I did not expect {_describe(token)} "
+                    "here. Try: [1, 2, 3]",
+                    opening.line,
                 )
 
     def parse_parentheses(self) -> Expression:

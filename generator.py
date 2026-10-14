@@ -5,6 +5,7 @@ statement (or header line such as `if`, `elif`, `else`, `for`, `function`)
 becomes exactly one Python line:
 
     let x = 5          ->   x = 5
+    x = 6              ->   x = 6
     show x             ->   print(x)
     echo("Hello")      ->   print('Hello')
     function F(a):     ->   def F(a):
@@ -14,6 +15,9 @@ becomes exactly one Python line:
     for c in "hi":     ->   for c in 'hi':
     give a             ->   return a
     F(1, 2)            ->   F(1, 2)
+    [1, 2]             ->   [1, 2]
+    max(a)             ->   max(a)      (also min and len)
+    sort(a)            ->   a.sort()    (sorts the list itself)
 
 Blocks are indented with 4 spaces, like in Scripty.
 
@@ -23,6 +27,9 @@ Design choices:
 - Text is written with `repr`, so quotes and special characters are safe.
 - The tree structure is kept exactly: every operation nested inside another
   one gets its own parentheses, e.g. `1 + 2 * 3` becomes `1 + (2 * 3)`.
+- Lists are Python lists. `show a` is still `print(a)`: the runner prints
+  lists in the Scripty way (see runner.py), so the generator needs no
+  type information.
 - A Scripty variable, function or input name that would clash with Python
   (a Python keyword such as `class`, or `print`) gets `_scy` added to its
   name in the generated code.
@@ -34,9 +41,9 @@ report runtime errors on the right Scripty line.
 
 import keyword
 
-from ast_nodes import (BinaryOp, Call, CallStatement, Compare, Echo,
-                       Expression, For, Function, Give, If, Let, Name, Negate,
-                       Number, Program, Show, Statement, Text)
+from ast_nodes import (Assign, BinaryOp, Call, CallStatement, Compare, Echo,
+                       Expression, For, Function, Give, If, Let, ListLiteral,
+                       Name, Negate, Number, Program, Show, Statement, Text)
 
 # Names that cannot be used as-is in the generated Python.
 _RESERVED = {"print"}
@@ -106,12 +113,17 @@ def python_name(name: str) -> str:
 def _statement(statement: Statement) -> str:
     if isinstance(statement, Let):
         return f"{python_name(statement.name)} = {_expression(statement.value)}"
+    if isinstance(statement, Assign):
+        return f"{python_name(statement.name)} = {_expression(statement.value)}"
     if isinstance(statement, (Show, Echo)):
         return f"print({_expression(statement.value)})"
     if isinstance(statement, Give):
         return f"return {_expression(statement.value)}"
     if isinstance(statement, CallStatement):
-        return _expression(statement.call)
+        call = statement.call
+        if call.name == "sort":  # sort(a) sorts the list itself
+            return f"{_expression(call.args[0])}.sort()"
+        return _expression(call)
     raise TypeError(f"Cannot generate code for {statement!r}")  # internal
 
 
@@ -122,6 +134,9 @@ def _expression(expression: Expression, nested: bool = False) -> str:
         return repr(expression.value)
     if isinstance(expression, Name):
         return python_name(expression.name)
+    if isinstance(expression, ListLiteral):
+        items = ", ".join(_expression(item) for item in expression.items)
+        return f"[{items}]"
     if isinstance(expression, Call):
         args = ", ".join(_expression(arg) for arg in expression.args)
         return f"{python_name(expression.name)}({args})"

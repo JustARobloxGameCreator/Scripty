@@ -278,15 +278,15 @@ class ForLoopRunTests(ProgramFileTestCase):
     def test_number_loop_checker_error(self):
         result = self.run_source("let n = 5\nfor i in n:\n    show i")
         self.assertFriendlyError(
-            result, 'Error on line 2: You can only go through text with '
-                    'for, but "n" is a number.')
+            result, 'Error on line 2: You can only go through text or a list '
+                    'with for, but "n" is a number.')
 
     def test_number_loop_runtime_error(self):
         result = self.run_source(
             "function Spell(t):\n    for c in t:\n        show c\n"
             "Spell(5)")
         self.assertFriendlyError(
-            result, "Error on line 2: You can only go through text with for")
+            result, "Error on line 2: You can only go through text or a list with for")
 
     def test_error_in_loop_body_reports_its_line(self):
         result = self.run_source(

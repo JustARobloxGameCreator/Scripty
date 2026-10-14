@@ -1,8 +1,9 @@
 """AST nodes: the tree the parser builds and later stages walk.
 
-Statements: Let, Show, Echo, CallStatement, Give, If, For, Function.
-Expressions: Number, Text, Name, BinaryOp, Negate, Call.  A Compare (such
-as x > 5) is a condition: it only appears in an if or elif line.  Every node remembers the `line` it came from, so the checker and
+Statements: Let, Assign, Show, Echo, CallStatement, Give, If, For, Function.
+Expressions: Number, Text, Name, BinaryOp, Negate, Call, ListLiteral.  A
+Compare (such as x > 5) is a condition: it only appears in an if or elif
+line.  Every node remembers the `line` it came from, so the checker and
 the generator can report friendly, line-numbered errors.
 """
 
@@ -53,6 +54,14 @@ class Call:
 
 
 @dataclass
+class ListLiteral:
+    """A list written in square brackets, e.g. [1, 2, 3] or []."""
+
+    items: list["Expression"]
+    line: int
+
+
+@dataclass
 class Compare:
     """A condition such as x > 5. op is one of == != >= <= > <."""
 
@@ -62,11 +71,20 @@ class Compare:
     line: int
 
 
-Expression = Number | Text | Name | BinaryOp | Negate | Call
+Expression = Number | Text | Name | BinaryOp | Negate | Call | ListLiteral
 
 
 @dataclass
 class Let:
+    name: str
+    value: Expression
+    line: int
+
+
+@dataclass
+class Assign:
+    """name = value: give an existing variable a new value (no `let`)."""
+
     name: str
     value: Expression
     line: int
@@ -121,7 +139,7 @@ class If:
 
 @dataclass
 class For:
-    """for name in value: ... - run the body once per character of a text."""
+    """for name in value: ... - run the body once per character or list item."""
 
     name: str
     iterable: Expression
@@ -137,7 +155,7 @@ class Function:
     line: int
 
 
-Statement = Let | Show | Echo | CallStatement | Give | If | For | Function
+Statement = Let | Assign | Show | Echo | CallStatement | Give | If | For | Function
 
 
 @dataclass

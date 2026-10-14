@@ -53,12 +53,13 @@ class ForLoopRuntimeTests(unittest.TestCase):
     def test_loop_over_number_is_friendly(self):
         error = error_for("for i in 5:\n    print(i)\n", {1: 3, 2: 4})
         self.assertEqual(error.line, 3)
-        self.assertEqual(error.message, "You can only go through text with "
-                                        "for, but this value is a number.")
+        self.assertEqual(error.message, "You can only go through text or a "
+                                        "list with for, but this value is a "
+                                        "number.")
 
     def test_loop_over_float_is_friendly(self):
         error = error_for("for i in 2.5:\n    pass\n", {1: 1, 2: 2})
-        self.assertIn("only go through text", error.message)
+        self.assertIn("only go through text or a list", error.message)
 
     def test_other_type_errors_are_not_mistaken_for_loops(self):
         error = error_for("for i in 'ab':\n    print(i + 1)\n", {1: 1, 2: 2})

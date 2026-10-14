@@ -118,7 +118,7 @@ class SyntaxErrorTests(unittest.TestCase):
         self.assertError("show x y", 1, '"y"')
 
     def test_line_starting_with_name(self):
-        self.assertError("x = 5", 1, "must start with")
+        self.assertError("x + 5", 1, "must start with")
 
     def test_error_reports_correct_line(self):
         self.assertError("let x = 1\nshow x\nlet = 2", 3)
@@ -313,8 +313,8 @@ class FunctionAndIfErrorTests(SyntaxErrorTests):
     def test_call_missing_comma(self):
         self.assertError("show F(1 2)", 1, "comma")
 
-    def test_assignment_without_let(self):
-        self.assertError("x = 5", 1, "must start with", "let x = ...")
+    def test_line_starting_with_name_mentions_assignment(self):
+        self.assertError("x + 5", 1, "must start with", "x = 5")
 
 
 TODO_FOR = 'for i in "hello world!":\n    show i'

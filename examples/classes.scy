@@ -1,0 +1,55 @@
+// Classes: make your own kinds of objects
+// Run with: scripty run examples/classes.scy
+
+// A class is a plan for objects. init runs when you make one.
+class Animal:
+    function init(self, name, sound):
+        self.name = name
+        self.sound = sound
+        self.energy = 10
+
+    function speak(self):
+        give self.name + " says " + self.sound
+
+    function run(self, minutes):
+        self.energy = self.energy - minutes
+
+    function tired(self):
+        if (self.energy < 5):
+            give "yes"
+        else:
+            give "no"
+
+// A Dog is an Animal that can also learn tricks.
+class Dog(Animal):
+    function init(self, name):
+        super.init(name, "woof") // run the init of the parent
+        self.tricks = []
+
+    function learn(self, trick):
+        self.tricks = self.tricks + [trick]
+
+    function speak(self): // replaces the speak of Animal
+        give super.speak() + "!"
+
+let cat = Animal("Tom", "meow")
+show cat.speak()          // Tom says meow
+show cat.energy           // 10
+cat.run(7)
+show cat.energy           // 3
+show cat.tired()          // yes
+cat.name = "Tommy"        // change what an object remembers
+show cat.speak()          // Tommy says meow
+
+let rex = Dog("Rex")
+rex.learn("sit")
+rex.learn("roll")
+show rex.speak()          // Rex says woof!
+show rex.tricks           // ["sit", "roll"]
+show rex.tired()          // no
+
+// Objects can go in lists and be given to functions.
+let pets = [cat, rex]
+for pet in pets:
+    show pet.speak()
+show rex                  // <Dog object>

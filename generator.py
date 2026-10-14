@@ -22,6 +22,14 @@ becomes exactly one Python line:
     a.pop(2)           ->   pop_at(a, 2)
     a[1]               ->   get_at(a, 1)
     a[1] = 9           ->   set_at(a, 1, 9)
+    class Dog:         ->   class Dog:
+    class Puppy(Dog):  ->   class Puppy(Dog):
+    function init(self, name):  ->   def __init__(self, name):   (in a class)
+    d.name             ->   d.name
+    d.name = "Max"     ->   d.name = 'Max'
+    d.speak(1)         ->   d.speak(1)
+    super.init(1)      ->   super().__init__(1)
+    Dog("Rex", 3)      ->   Dog('Rex', 3)
 
 Blocks are indented with 4 spaces, like in Scripty.
 
@@ -39,9 +47,22 @@ Design choices:
   write its warning, so the generator passes it as the last input.
 - `get_at` and `set_at` are helpers too: they check the position and give
   the friendly "no item at position 3" errors (see runner.py).
-- A Scripty variable, function or input name that would clash with Python
-  (a Python keyword such as `class`, or `print`) gets `_scy` added to its
-  name in the generated code.
+- A Scripty variable, function, class, input, thing-an-object-remembers or
+  action name that would clash with Python (a Python keyword such as `def`
+  or `None`, or `print`) gets `_scy` added to its name in the generated
+  code. The only renamed action is `init`, which becomes `__init__`.
+- Classes become Python classes, each action a `def` inside, with a blank
+  line between actions. Every generated line still has a line map entry.
+- A dot is written the way the checker resolved it (it leaves the answer in
+  `target_kind` on the tree): a known object gets plain Python
+  (`d.speak()`, `d.name`); a known list keeps `remove_all` / `pop_at`; when
+  the kind is unknown (a function input) the generator writes
+  `call_action(x, 'speak', [1], LINE)` / `get_attr(x, 'name')`, small
+  helpers from the runner that look at what `x` really is. An unknown
+  `x.pop(i)` or `x.remove(v)` as a line stays `pop_at` / `remove_all`, which
+  also pass the call on to an object that has such an action. When the
+  tree did not go through the checker, an unknown `remove` or `pop` with
+  one input is written exactly like before classes existed.
 
 `generate` returns the Python source and a line map: a dict from each
 Python line number to the Scripty line it came from. The runner uses it to
@@ -50,13 +71,15 @@ report runtime errors on the right Scripty line.
 
 import keyword
 
-from ast_nodes import (Assign, AssignIndex, BinaryOp, Call, CallStatement, Compare, Echo,
-                       Expression, For, Function, Give, If, Index, Let,
-                       ListLiteral, MethodStatement, Name, Negate, Number, Program, Show,
-                       Statement, Text)
+from ast_nodes import (LIST_METHODS, Assign, AssignAttribute, AssignIndex,
+                       Attribute, BinaryOp, Call, CallStatement, ClassDef,
+                       Compare, Echo, Expression, For, Function, Give, If,
+                       Index, Let, ListLiteral, MethodCall, MethodStatement,
+                       Name, Negate, Number, Program, Show, Statement, Text)
 
 # Names that cannot be used as-is in the generated Python.
-_RESERVED = {"print", "remove_all", "pop_at", "get_at", "set_at"}
+_RESERVED = {"print", "remove_all", "pop_at", "get_at", "set_at",
+             "call_action", "get_attr"}
 
 
 def generate(program: Program) -> tuple[str, dict[int, int]]:
@@ -77,8 +100,12 @@ def _add(text: str, level: int, scripty_line: int, lines: list[str],
 
 def _block(statements: list[Statement], level: int, lines: list[str],
            line_map: dict[int, int]) -> None:
-    for statement in statements:
-        if isinstance(statement, Function):
+    for index, statement in enumerate(statements):
+        if isinstance(statement, ClassDef):
+            _class(statement, level, lines, line_map)
+            if index < len(statements) - 1:
+                lines.append("")  # a blank line after the class
+        elif isinstance(statement, Function):
             params = ", ".join(python_name(p) for p in statement.params)
             header = f"def {python_name(statement.name)}({params}):"
             _add(header, level, statement.line, lines, line_map)
@@ -93,6 +120,21 @@ def _block(statements: list[Statement], level: int, lines: list[str],
         else:
             _add(_statement(statement), level, statement.line, lines,
                  line_map)
+
+
+def _class(cls: ClassDef, level: int, lines: list[str],
+           line_map: dict[int, int]) -> None:
+    header = f"class {python_name(cls.name)}"
+    if cls.parent is not None:
+        header += f"({python_name(cls.parent)})"
+    _add(header + ":", level, cls.line, lines, line_map)
+    for index, method in enumerate(cls.methods):
+        if index > 0:
+            lines.append("")  # a blank line between actions
+        params = ", ".join(python_name(p) for p in method.params)
+        _add(f"def {_action_name(method.name)}({params}):", level + 1,
+             method.line, lines, line_map)
+        _block(method.body, level + 2, lines, line_map)
 
 
 def _if(node: If, level: int, lines: list[str],
@@ -120,11 +162,28 @@ def python_name(name: str) -> str:
     return name
 
 
+def display_name(python: str) -> str:
+    """The Scripty name for a Python name (undoes python_name)."""
+    plain = python.removesuffix("_scy")
+    if plain != python and python_name(plain) == python:
+        return plain
+    return python
+
+
+def _action_name(name: str) -> str:
+    """The Python name of an action: `init` is Python's `__init__`."""
+    return "__init__" if name == "init" else python_name(name)
+
+
 def _statement(statement: Statement) -> str:
     if isinstance(statement, Let):
         return f"{python_name(statement.name)} = {_expression(statement.value)}"
     if isinstance(statement, Assign):
         return f"{python_name(statement.name)} = {_expression(statement.value)}"
+    if isinstance(statement, AssignAttribute):
+        return (f"{_expression(statement.target)}."
+                f"{python_name(statement.name)} = "
+                f"{_expression(statement.value)}")
     if isinstance(statement, AssignIndex):
         return (f"set_at({python_name(statement.target.name)}, "
                 f"{_expression(statement.index)}, "
@@ -139,13 +198,27 @@ def _statement(statement: Statement) -> str:
             return f"{_expression(call.args[0])}.sort()"
         return _expression(call)
     if isinstance(statement, MethodStatement):
-        call = statement.call
-        target = python_name(call.target.name)
+        return _method_call(statement.call, as_value=False)
+    raise TypeError(f"Cannot generate code for {statement!r}")  # internal
+
+
+def _method_call(call: MethodCall, as_value: bool) -> str:
+    """Write a.pop(1), d.speak(1), super.init(1)... see the module notes."""
+    target = _expression(call.target)
+    args = ", ".join(_expression(arg) for arg in call.args)
+    if call.target_kind == "super":
+        return f"super().{_action_name(call.method)}({args})"
+    if call.target_kind == "object":
+        return f"{target}.{_action_name(call.method)}({args})"
+    if (call.method in LIST_METHODS and len(call.args) == 1
+            and (call.target_kind == "list" or not as_value)):
         argument = _expression(call.args[0])
         if call.method == "remove":
-            return f"remove_all({target}, {argument}, {statement.line})"
+            return f"remove_all({target}, {argument}, {call.line})"
         return f"pop_at({target}, {argument})"
-    raise TypeError(f"Cannot generate code for {statement!r}")  # internal
+    text = (f"call_action({target}, {call.method!r}, [{args}], "
+            f"{call.line}")
+    return text + (", True)" if as_value else ")")
 
 
 def _expression(expression: Expression, nested: bool = False) -> str:
@@ -161,6 +234,13 @@ def _expression(expression: Expression, nested: bool = False) -> str:
     if isinstance(expression, Call):
         args = ", ".join(_expression(arg) for arg in expression.args)
         return f"{python_name(expression.name)}({args})"
+    if isinstance(expression, Attribute):
+        target = _expression(expression.target)
+        if expression.target_kind == "object":
+            return f"{target}.{python_name(expression.name)}"
+        return f"get_attr({target}, {expression.name!r})"
+    if isinstance(expression, MethodCall):
+        return _method_call(expression, as_value=True)
     if isinstance(expression, Index):
         return (f"get_at({_expression(expression.target)}, "
                 f"{_expression(expression.index)})")

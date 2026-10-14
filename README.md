@@ -77,6 +77,7 @@ python scripty.py run examples/text.scy
 python scripty.py run examples/conditions.scy
 python scripty.py run examples/functions.scy
 python scripty.py run examples/loops.scy
+python scripty.py run examples/lists.scy
 ```
 
 ## See the Python that Scripty makes

@@ -6,7 +6,7 @@ Rules:
 - Numbers: 5 or 3.14 (the value is an int or a float).
 - Text: written in double quotes on a single line, e.g. "Hello".
 - Operators: + - * / =  and the comparisons == != >= <= > <
-- Punctuation: ( ) , :
+- Punctuation: ( ) [ ] , :
 - Comments: from // or # to the end of the line are ignored. A // or #
   inside quoted text is just text. (Scripty has no integer division, so
   // is free to be a comment.)
@@ -39,6 +39,8 @@ TEXT = "TEXT"
 OPERATOR = "OPERATOR"  # + - * / =  == != >= <= > <
 LPAREN = "LPAREN"
 RPAREN = "RPAREN"
+LBRACKET = "LBRACKET"
+RBRACKET = "RBRACKET"
 COMMA = "COMMA"
 COLON = "COLON"
 NEWLINE = "NEWLINE"
@@ -149,6 +151,12 @@ def _tokenize_line(line: str, line_number: int) -> list[Token]:
             pos += 1
         elif char == ")":
             tokens.append(Token(RPAREN, char, line_number))
+            pos += 1
+        elif char == "[":
+            tokens.append(Token(LBRACKET, char, line_number))
+            pos += 1
+        elif char == "]":
+            tokens.append(Token(RBRACKET, char, line_number))
             pos += 1
         elif char == ",":
             tokens.append(Token(COMMA, char, line_number))

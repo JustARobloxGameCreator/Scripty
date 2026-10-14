@@ -326,8 +326,8 @@ class ForLoopTests(unittest.TestCase):
     def test_number_literal_is_an_error(self):
         error = error_for("for i in 5:\n    show i")
         self.assertEqual(error.line, 1)
-        self.assertEqual(error.message, "You can only go through text with "
-                                        "for, but 5 is a number.")
+        self.assertEqual(error.message, "You can only go through text or a "
+                                        "list with for, but 5 is a number.")
 
     def test_number_variable_is_an_error(self):
         error = error_for("let n = 3\nfor i in n:\n    show i")

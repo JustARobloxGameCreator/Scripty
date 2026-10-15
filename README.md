@@ -120,12 +120,6 @@ python -m unittest discover -s tests -t .
 
 You should see `OK` at the end.
 
-## Project documents
-
-- [`docs/architecture.md`](docs/architecture.md): how Scripty works inside
-- [`docs/changelog.md`](docs/changelog.md): what changed in each version
-- [`docs/project-status.md`](docs/project-status.md): what is done and what is next
-
 ## Feedback
 
 Found a bug, a confusing error message, or have an idea? Please

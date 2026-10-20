@@ -33,36 +33,8 @@ becomes exactly one Python line:
 
 Blocks are indented with 4 spaces, like in Scripty.
 
-Design choices:
-
-- Division is TRUE division: `7 / 2` is 3.5 and `4 / 2` is 2.0 (Python's `/`).
-- Text is written with `repr`, so quotes and special characters are safe.
-- The tree structure is kept exactly: every operation nested inside another
-  one gets its own parentheses, e.g. `1 + 2 * 3` becomes `1 + (2 * 3)`.
-- Lists are Python lists. `show a` is still `print(a)`: the runner prints
-  lists in the Scripty way (see runner.py), so the generator needs no
-  type information.
-- `remove_all` and `pop_at` are small helpers that the runner gives to the
-  program (see runner.py). `remove_all` needs the Scripty line number to
-  write its warning, so the generator passes it as the last input.
-- `get_at` and `set_at` are helpers too: they check the position and give
-  the friendly "no item at position 3" errors (see runner.py).
-- A Scripty variable, function, class, input, thing-an-object-remembers or
-  action name that would clash with Python (a Python keyword such as `def`
-  or `None`, or `print`) gets `_scy` added to its name in the generated
-  code. The only renamed action is `init`, which becomes `__init__`.
-- Classes become Python classes, each action a `def` inside, with a blank
-  line between actions. Every generated line still has a line map entry.
-- A dot is written the way the checker resolved it (it leaves the answer in
-  `target_kind` on the tree): a known object gets plain Python
-  (`d.speak()`, `d.name`); a known list keeps `remove_all` / `pop_at`; when
-  the kind is unknown (a function input) the generator writes
-  `call_action(x, 'speak', [1], LINE)` / `get_attr(x, 'name')`, small
-  helpers from the runner that look at what `x` really is. An unknown
-  `x.pop(i)` or `x.remove(v)` as a line stays `pop_at` / `remove_all`, which
-  also pass the call on to an object that has such an action. When the
-  tree did not go through the checker, an unknown `remove` or `pop` with
-  one input is written exactly like before classes existed.
+Design choices (true division, repr text, `_scy` renames, how a dot is
+written): see docs/architecture.md, section "Generator".
 
 `generate` returns the Python source and a line map: a dict from each
 Python line number to the Scripty line it came from. The runner uses it to

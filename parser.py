@@ -35,43 +35,8 @@ Grammar:
                  { "," expression } ] ")" ]
                  (d.name, self.pet.name, a.pop(1), d.speak(), super.init(1))
 
-Design choices:
-
-- Unary minus IS supported (`-5`, `-x`, `3 * -2`). It binds tighter than *
-  and /, so `-2 * 3` means `(-2) * 3`.
-- `*` and `/` are handled one level deeper than `+` and `-`, which is what
-  gives them higher precedence.
-- A condition is exactly one comparison (`x > 5`). Comparisons are not
-  values: they only appear after `if` and `elif`. No `and`/`or` yet.
-- Functions can only be defined at the top level (not inside another
-  function, an if or a for), and `give` only works inside a function.
-- A list is written `[1, 2, 3]` (or `[]`). A trailing comma (`[1, 2,]`) is
-  an error. Lists inside lists are rejected later, by the checker.
-- `name = value` (no `let`) is a statement of its own: it gives an
-  existing variable a new value. Whether the name exists is the checker's
-  job.
-- A dot comes after a name: `a.pop(1)`, `d.speak()`, `d.name`, and chains
-  of things such as `self.pet.name` or `self.pet.speak()`. The parser only
-  checks the shape. Whether `a` is a list or an object, which actions exist
-  and how many inputs they need is the checker's job (the list actions are
-  `remove` and `pop`). The word after a dot may be any name, even a keyword
-  such as `class`. A call ends the chain: `d.speak().x` is an error (put the
-  answer in a variable first). A "." after a number, a text or ")" is an
-  error.
-- A class is `class Dog:` or `class Puppy(Dog):` (one parent) with an
-  indented body that holds only `function` lines (the actions). It can only
-  be written at the top level, like a function. `d.name = value` is a line of
-  its own and changes (or creates) a thing the object remembers.
-- `[ ]` right after a value picks one item (`a[1]`, `"hello"[0]`, `F(1)[0]`,
-  `(a + b)[2]`, `a[0][1]`). It can follow any value, so the checker decides
-  whether it makes sense. Spaces change nothing: `a [1]` is `a[1]`. It binds
-  tighter than everything else, so `-a[0]` is `-(a[0])`. `a[]`, a missing
-  `]` and a line that is only `a[1]` are errors. `a[1] = 9` changes an item;
-  only a plain name can be on the left (`a[0][1] = 9` is an error).
-- A for loop goes through the characters of a text or the items of a
-  list. It can be used at the
-  top level, inside functions and inside if branches, and loops, ifs and
-  `give` can be nested inside it.
+Design choices (precedence, lists, dots, classes, indexing, for): see
+docs/architecture.md, section "Parser".
 
 Errors raise ScriptyError with a line number.
 """

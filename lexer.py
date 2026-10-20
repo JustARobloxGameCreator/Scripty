@@ -1,28 +1,10 @@
-"""Lexer: turns Scripty source text into a list of tokens.
+"""Lexer: turns Scripty source text into a list of tokens, each with its line.
 
-Rules:
-- Keywords: let, show, echo, function, if, elif, else, give, for, in, class.
-  (self and super are ordinary names to the lexer; the checker guards them.)
-- Names: letters, digits and underscores, not starting with a digit.
-- Numbers: 5 or 3.14 (the value is an int or a float).
-- Text: written in double quotes on a single line, e.g. "Hello".
-- Operators: + - * / =  and the comparisons == != >= <= > <
-- Punctuation: ( ) [ ] , : and . (a dot only appears after the name of a
-  list or an object, as in a.remove("Dog") or d.name; a number like 1.5 is
-  still one number token)
-- Comments: from // or # to the end of the line are ignored. A // or #
-  inside quoted text is just text. (Scripty has no integer division, so
-  // is free to be a comment.)
-- Spaces inside a line are ignored. Blank and comment-only lines produce
-  no tokens and do not affect indentation.
-- Each non-blank line ends with a NEWLINE token, so the parser can tell
-  where one statement ends and the next begins.
-- Indentation: blocks are indented by exactly 4 spaces per level. When a
-  line is indented one level deeper than the line before, an INDENT token
-  comes first; when it goes back out, one DEDENT token per level closes
-  the blocks (also at the end of the file). Tabs at the start of a line
-  are rejected with a friendly error, as are indents that are not a
-  multiple of 4 spaces or that jump more than one level at once.
+Keywords, names, numbers, text in double quotes, operators, punctuation and
+`//` or `#` comments. Every non-blank line ends with a NEWLINE token, and
+blocks are 4 spaces per level (INDENT / DEDENT tokens). Bad characters,
+unclosed text and bad indentation raise a friendly ScriptyError. Details:
+docs/architecture.md, section "Lexer".
 """
 
 import re

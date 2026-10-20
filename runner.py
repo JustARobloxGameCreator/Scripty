@@ -1,31 +1,11 @@
 """Runner: executes generated Python and translates runtime errors.
 
-`run_python(source, line_map)` compiles the code under a known filename and
-runs it with exec(). If anything goes wrong, the traceback is used to find
-which line of the generated Python failed, the line map turns that into a
-Scripty line, and a friendly ScriptyError is raised. The user never sees a
-Python traceback.
-
-The program runs with its own `print`, so `show` writes a list the Scripty
-way: [1, 2, 3] for numbers and ["a", "b"] for text (Python would write
-single quotes). Numbers and text are printed exactly as Python prints them.
-
-Objects made from a class are shown as `<Dog object>` (the class name between
-the brackets), also inside a list: [<Dog object>, <Dog object>].
-
-It also gets helpers for the list actions `a.remove(value)` and
-`a.pop(index)`: `remove_all` (prints a warning to stderr and goes on when
-nothing matches) and `pop_at` (raises a friendly error for a bad position).
-`get_at(a, i)` and `set_at(a, i, value)` are what `a[i]` and `a[i] = value`
-become: they work like Python's, but give friendly errors (a position that is
-too big or too negative, a position that is not a whole number, ...).
-
-For classes it gets `call_action(x, "speak", [args], line)` and
-`get_attr(x, "name")`. The generator only writes them when it does not know
-what `x` is (a function input): they look at the real value and either run
-the action, or give a friendly error such as "A number has no action called
-speak." (also: remove_all and pop_at pass the call on to an object that has
-an action with that name).
+`run_python(source, line_map)` runs the code with exec(). If it fails, the
+traceback gives the Python line, the line map turns it into a Scripty line,
+and a friendly ScriptyError is raised (never a Python traceback). The program
+gets its own `print` (Scripty-style lists and objects) and the helpers the
+generator writes: remove_all, pop_at, get_at, set_at, call_action, get_attr.
+Details: docs/architecture.md, section "Run".
 """
 
 import inspect

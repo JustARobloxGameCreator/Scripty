@@ -5,7 +5,7 @@ All notable changes to Scripty are recorded here, newest first.
 ## [Unreleased]
 
 ### Changed (shorter code)
-- `checker.py` is 132 lines shorter (1125 to 993): the long header comment now points to `docs/architecture.md`, and the repeated built-in / `self` / `super` name check lives in one helper, `_check_not_taken`. No behaviour change; all 710 tests pass.
+- The Python files are about 230 lines shorter (3179 to 2946). The long header comments in `checker.py`, `parser.py`, `generator.py`, `lexer.py` and `runner.py` now point to `docs/architecture.md` (the grammar and the generator mapping table stay), and the repeated built-in / `self` / `super` name check in `checker.py` lives in one helper, `_check_not_taken`. No behaviour change; all 710 tests pass.
 
 ### Added (classes)
 - Classes, "just like in Python" but in Scripty's words: `class Dog:` with indented `function` lines inside (the actions), and `class Puppy(Dog):` for one parent (single inheritance; actions are inherited and can be replaced). The to-do example runs as written (output `Rex says woof`, `4`, `Bit says yip`). Everything is described in `docs/architecture.md` ("v0.5 language scope").

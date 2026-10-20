@@ -1,137 +1,8 @@
-"""Checker: finds meaning errors in a parsed program.
-
-The parser only knows whether the code has the right shape. The checker
-knows whether it makes sense. It catches:
-
-- using a variable that was never declared (`show z` with no `let z = ...`)
-- declaring the same variable twice (use `name = value` to change it)
-- giving a variable a new value (`x = 5`) before it exists, or one of a
-  different kind than it had
-- using a built-in name (max, min, len, sort) as a variable or function
-- using a list action (`a.remove("Dog")`, `a.pop(3)`) on something that is
-  not a list, with the wrong number of inputs, with a position that is not
-  a whole number or is negative, or as a value
-- using the built-in functions wrongly (wrong number of inputs, not a list)
-- mixing lists with numbers or text in a calculation
-- mixing text and numbers in a calculation (`"a" + 1`, `"a" * "b"`)
-- comparing text with a number using > < >= <=
-- calling a function that does not exist, or with the wrong number of inputs
-- declaring a function twice, or a function and a variable with one name
-- classes: a parent that is not a class written above, a function in a class
-  whose first input is not `self`, a class call or action call with the wrong
-  number of inputs, an action or thing that the class does not have, `self`
-  or `super` used in the wrong place, and calculations with objects
-
-Scope rules (simple on purpose):
-
-- A name can only be declared once with `let`. A `let` can never silently
-  reuse a name that is already visible, so there is no shadowing. To change
-  a variable that already exists, write `name = value` (no `let`).
-- Reassignment `name = value` needs a name that is visible from the place
-  of the line, so inside an if / for block at the top level you can change
-  an outer variable, and a variable made inside the block can only be
-  changed inside it. A function can only change its own inputs and its own
-  variables (it still cannot see the variables outside it). The new value
-  must have the same kind as the old one (number, text or list) whenever
-  both are known; the kind of a function input stays unknown.
-- The top of the program is the "global" scope.
-- A function has its OWN scope. Its inputs (parameters) are declared in it,
-  and so is every `let` inside it. A function can NOT see variables from
-  outside: pass them in as inputs. Because the scopes are separate, a
-  `let x` inside a function does not clash with a `let x` outside.
-- The lines inside an if / elif / else branch form a small scope of their
-  own: variables made there disappear after the branch ends. They can see
-  everything around them, and cannot reuse a name that is already visible.
-- A `for` loop has a scope of its own too: the loop variable and every
-  `let` inside the loop disappear after it. Like in an if branch, the loop
-  variable cannot reuse a name that is already visible (no shadowing).
-  Going through a text gives a text (one character) at each step; going
-  through a list gives a value of unknown kind. A `for` can only go
-  through text or a list: a number is an error when its kind is known, and
-  a run-time error otherwise (function inputs and call results).
-- Function names live in one list for the whole program. A function is
-  visible everywhere; a call at the top of the program must come after the
-  `function` lines (it would fail at run time otherwise). Functions may
-  call themselves and each other.
-- A function name cannot also be a variable or input name.
-
-Type rules (simple, no guessing): every value is a number, text or a list.
-A list holds numbers or text (mixed is allowed; sorting a mixed list fails
-at run time with a friendly error). Lists inside lists are not supported.
-`list + list` joins them into one new list; any other calculation with a
-list is an error, and `<  >  <=  >=` do not work on lists (`==` and `!=`
-do). Built-in functions: max(list), min(list), len(list or text) and
-sort(list). `sort` changes the list itself, so it is only allowed as a
-line on its own, with a variable as input. max and min give an answer of
-unknown kind, len gives a number.
- The
-checker tracks the kind of each variable from its `let`. Numbers work with
-all of + - * /. Text can only be joined with another text using `+`. Any
-other mix is an error. Function inputs and the results of calls have an
-UNKNOWN kind: the checker accepts them anywhere and the run-time check
-catches mistakes. Conditions: `==` and `!=` may compare anything (different
-kinds are simply never equal); `> < >= <=` need two numbers or two texts
-(texts compare alphabetically).
-
-A function that has a `give` (also one inside an if or a for) must give on
-every path (its last line must be a `give`, or an if/else where every
-branch gives), so that a call never produces "nothing". A `for` never counts
-as giving, because it may run zero times (an empty text): put a `give`
-after the loop. A function without any `give` can only be called as a
-line on its own, not used as a value.
-
-List actions: `name.remove(value)` and `name.pop(index)` are lines on
-their own (like `sort(a)`), because they change the list and give nothing
-back. The name must be a visible variable or function input (the usual
-scope rules apply). A known number or text is an error; an unknown kind
-(function input) is accepted and the runner checks it. `remove` takes any
-one value; `pop` takes one whole, non-negative number (a decimal or a
-negative number written in the program is an error here, and one worked
-out while running is an error in the runner).
-
-Indexing: `a[1]` (a position counted from 0; negative counts from the end)
-works on a list or a text and can be used anywhere a value can. A known
-number is an error. The position must be a whole number: text, a list or a
-decimal written in the program is an error here; one worked out while
-running is checked by the runner (4 / 2 = 2.0 is fine). The answer is text
-for a text, and of unknown kind for a list (its items may be mixed), so
-`a[1] + 1` never gives a false error. `a[1] = 9` changes one item of an
-existing list: the name must be visible, text can't be changed, and the new
-value may be anything except a list (items can be mixed).
-
-Classes (see docs/architecture.md):
-
-- A class name is declared once and shares one list of names with functions
-  and variables. A class can only be written at the top level, and its
-  parent (`class Puppy(Dog):`) must be a class written on an earlier line.
-- Every function inside a class (an "action") has `self` as its first input
-  (the object it works on). `self` and `super` are reserved: they can't name
-  a variable, input, function or class. Outside an action they are errors.
-- An action has its own scope like a function: its inputs (with `self`) and
-  its own `let`s only. Functions stay visible everywhere. The rules about
-  `give` are the same as for functions; `init` may not give anything.
-- `Dog(...)` makes an object. The number of inputs must match the `init`
-  of the class (or of a parent), or be 0 when there is none. The kind of the
-  result is "object Dog". Objects can be reassigned to an object of the same
-  class or of a child class, and compared with == and != only.
-- Attributes: `d.name` / `self.name` is read when the checker knows the
-  class and can find an assignment `x.name = ...` anywhere in the class,
-  its parents, its children or in the rest of the program; otherwise it is
-  an error (when the kind is not known the runner checks). An attribute may
-  not have the name of an action. Attributes have an unknown kind.
-- `d.speak(...)` is checked against the actions of the class and its parents
-  (`self.speak()` only against the class the action is written in).
-  `super.name(...)` is checked against the parent. `init` is only run by
-  `Dog(...)` and `super.init(...)`.
-- Method calls resolve by what the target is: a known list -> a list action
-  (remove or pop); a known object -> an action of its class; a known number
-  or text -> an error; unknown (a function input or a call result) -> the
-  runner decides while the program runs. The checker writes the answer into
-  `MethodCall.target_kind` ("list", "object", "super" or "unknown") and
-  `Attribute.target_kind`, for the generator. That is the only change the
-  checker makes to the tree.
-
-The checker walks the tree top to bottom.
+"""Checker: finds meaning errors in a parsed program (names, kinds, scopes,
+function and class rules). The parser only knows the shape; this knows the
+sense. It returns the tree unchanged, except that it fills in `target_kind`
+on MethodCall and Attribute nodes for the generator. The full rules are in
+docs/architecture.md (section "Checker").
 """
 
 from ast_nodes import (LIST_METHODS, Assign, AssignAttribute, AssignIndex, Attribute,
@@ -217,12 +88,7 @@ class _Checker:
     # -- functions ---------------------------------------------------------
 
     def register_function(self, function: Function) -> None:
-        if function.name in BUILTINS:
-            raise ScriptyError(_builtin_name_message(function.name),
-                               function.line)
-        if function.name in RESERVED:
-            raise ScriptyError(_reserved_message(function.name),
-                               function.line)
+        _check_not_taken(function.name, function.line)
         if function.name in self.classes:
             raise ScriptyError(
                 f'"{function.name}" is already the name of a class (line '
@@ -254,10 +120,7 @@ class _Checker:
     # -- classes -----------------------------------------------------------
 
     def register_class(self, cls: ClassDef) -> None:
-        if cls.name in BUILTINS:
-            raise ScriptyError(_builtin_name_message(cls.name), cls.line)
-        if cls.name in RESERVED:
-            raise ScriptyError(_reserved_message(cls.name), cls.line)
+        _check_not_taken(cls.name, cls.line)
         if cls.name in self.classes:
             raise ScriptyError(
                 f'The class "{cls.name}" is already defined on line '
@@ -560,10 +423,7 @@ class _Checker:
 
     def declare(self, scope: _Scope, name: str, line: int, kind: str,
                 allow_reserved: bool = False) -> None:
-        if name in BUILTINS:
-            raise ScriptyError(_builtin_name_message(name), line)
-        if name in RESERVED and not allow_reserved:
-            raise ScriptyError(_reserved_message(name), line)
+        _check_not_taken(name, line, allow_reserved)
         if name in self.functions:
             raise ScriptyError(
                 f'"{name}" is already the name of a function (line '
@@ -1046,6 +906,14 @@ def _with_article(kind: str) -> str:
         article = "an" if name[0].lower() in "aeiou" else "a"
         return f"{article} {name} object"
     return "text" if kind == TEXT_KIND else f"a {kind}"
+
+
+def _check_not_taken(name: str, line: int, allow_reserved: bool = False) -> None:
+    """A name may not be a built-in or (unless allowed) self / super."""
+    if name in BUILTINS:
+        raise ScriptyError(_builtin_name_message(name), line)
+    if name in RESERVED and not allow_reserved:
+        raise ScriptyError(_reserved_message(name), line)
 
 
 def _builtin_name_message(name: str) -> str:

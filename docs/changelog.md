@@ -4,6 +4,9 @@ All notable changes to Scripty are recorded here, newest first.
 
 ## [Unreleased]
 
+### Changed (shorter code)
+- `checker.py` is 132 lines shorter (1125 to 993): the long header comment now points to `docs/architecture.md`, and the repeated built-in / `self` / `super` name check lives in one helper, `_check_not_taken`. No behaviour change; all 710 tests pass.
+
 ### Added (classes)
 - Classes, "just like in Python" but in Scripty's words: `class Dog:` with indented `function` lines inside (the actions), and `class Puppy(Dog):` for one parent (single inheritance; actions are inherited and can be replaced). The to-do example runs as written (output `Rex says woof`, `4`, `Bit says yip`). Everything is described in `docs/architecture.md` ("v0.5 language scope").
 - Objects: `Dog("Rex", 3)` makes an object and runs its `init` action (Scripty's name for `__init__`). No `init` means no inputs. The first input of every action must be `self` (the object); it is not passed when calling. Attributes: `self.name = name` / `d.name = "Max"` (a line of its own) and reading `d.name` / `self.age` anywhere a value goes. Actions: `d.speak()` as a value and `d.birthday()` as a line. `super.init(name, 0)` runs the parent's `init` (and `super.speak()` the parent's other actions). `show d` prints `<Dog object>`. `==` / `!=` on objects mean "the very same object". Objects work in lists, functions and other objects.
